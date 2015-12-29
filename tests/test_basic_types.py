@@ -293,14 +293,6 @@ class TestBoolean(unittest.TestCase):
         self.assertEqual(xdrlib2.Boolean(1), xdrlib2.TRUE)
         self.assertRaises(ValueError, xdrlib2.Boolean, 2)
         
-        
-        
-        
-    
-            
-            
-        
-
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

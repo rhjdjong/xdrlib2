@@ -10,19 +10,33 @@ import enum
 block_size = 4
 endian = '>'  # Big-endian format character for struct.pack
 
+
+def _pack(fmt, *vars):
+    try:
+        return struct.pack(fmt, *vars)
+    except struct.error as e:
+        raise ValueError("Packing error") from e
+
+def _unpack(fmt, source):
+    try:
+        return struct.unpack(fmt, source)
+    except struct.error as e:
+        raise ValueError("Unpacking error") from e
+
+    
 class _bounded_int(int):
     def __new__(cls, value):
         if cls.min <= value < cls.max:
             return super().__new__(cls, value)
-        raise ValueError()
+        raise ValueError('Value out of range')
 
 class _packable:    
     def pack(self):
-        return struct.pack(self.packfmt, self) # + self.padding
+        return _pack(self.packfmt, self) # + self.padding
     
     @classmethod
     def unpack(cls, source):
-        tup = struct.unpack(cls.packfmt, source)
+        tup = _unpack(cls.packfmt, source)
         return cls(tup[0])
 
 
@@ -68,4 +82,45 @@ class Boolean(Enumeration):
     
 FALSE = Boolean.FALSE
 TRUE = Boolean.TRUE   
+
+
+class FixedOpaque(bytes):
+    packfmt = endian + '{0:d}s'
+    unpackfmt = endian + '{0:d}s{1:d}s'
     
+    def __new__(cls, data):
+        if len(data) != cls.size:
+            raise ValueError('Incorrect data size')
+        return super().__new__(cls, data)
+    
+    def pack(self):
+        padding = (block_size - self.size % block_size) % block_size
+        return _pack(self.packfmt.format(self.size + padding), self)
+    
+    @classmethod
+    def unpack(cls, source):
+        padding = (block_size - cls.size % block_size) % block_size
+        tup = _unpack(cls.unpackfmt.format(cls.size, padding), source)
+        return cls(tup[0])
+    
+class VarOpaque(bytes):
+    packfmt = endian + 'I{0:d}s'
+    unpackfmt = endian + 'I{0:d}s{1:d}s'
+    
+    def __new__(cls, data):
+        if len(data) > cls.size:
+            raise ValueError('Incorrect data size')
+        return super().__new__(cls, data)
+    
+    def pack(self):
+        packsize = block_size * (len(self) // block_size + 1)
+        return struct.pack(self.packfmt.format(packsize), len(self), self)
+    
+    @classmethod
+    def unpack(cls, source):
+        size = Int32u.unpack(source[:4])
+        padding = (block_size - size % block_size) % block_size
+        tup = _unpack(cls.unpackfmt.format(size, padding), source)
+        return cls(tup[1])
+        
+        
