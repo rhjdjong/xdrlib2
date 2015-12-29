@@ -58,7 +58,11 @@ class Float64(float, _packable):
     packfmt = endian+'d'
     
 
-class Boolean(Int32, enum.Enum):
+class Enumeration(Int32, enum.Enum):
+    pass
+
+
+class Boolean(Enumeration):
     FALSE = 0
     TRUE = 1
     

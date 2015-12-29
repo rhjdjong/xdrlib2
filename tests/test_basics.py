@@ -7,6 +7,7 @@ import unittest
 import math
 
 import xdrlib2
+from builtins import type
 
 class TestPackageStructure(unittest.TestCase):
 
@@ -240,13 +241,41 @@ class TestFloats(unittest.TestCase):
             packed = p.to_bytes(8, 'big')
             self.assertTrue(math.isnan(xdrlib2.Float64.unpack(packed)))
                 
-            
+
+class TestEnumeration(unittest.TestCase):
+    class Colors(xdrlib2.Enumeration):
+        RED=2
+        YELLOW=3
+        BLUE=5
+        
+    def test_enum_values(self):
+        self.assertEqual(self.Colors.RED, 2)
+        self.assertEqual(self.Colors.YELLOW, 3)
+        self.assertEqual(self.Colors.BLUE, 5)
+    
+    def test_enum_packing(self):
+        bp = self.Colors.RED.pack()
+        self.assertEqual(bp, b'\0\0\0\x02')
+        bp = self.Colors.YELLOW.pack()
+        self.assertEqual(bp, b'\0\0\0\x03')
+        bp = self.Colors.BLUE.pack()
+        self.assertEqual(bp, b'\0\0\0\x05')
+    
+    def test_enum_construction(self):
+        self.assertEqual(self.Colors(self.Colors.RED), self.Colors.RED)
+        self.assertEqual(self.Colors(self.Colors.YELLOW), 3)
+        self.assertEqual(self.Colors(5), self.Colors.BLUE)
+        self.assertRaises(ValueError, self.Colors, 10)
+        
+                    
 class TestBoolean(unittest.TestCase):
     def test_boolean_values(self):
         self.assertEqual(xdrlib2.FALSE, False)
         self.assertEqual(xdrlib2.TRUE, True)
         self.assertEqual(xdrlib2.FALSE, 0)
         self.assertEqual(xdrlib2.TRUE, 1)
+        self.assertTrue(xdrlib2.TRUE)
+        self.assertFalse(xdrlib2.FALSE)
     
     def test_boolean_packing(self):
         bp = xdrlib2.FALSE.pack()
