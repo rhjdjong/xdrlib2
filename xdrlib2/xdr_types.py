@@ -165,12 +165,12 @@ class String(_VarBytes):
     pass
 
 
-class FixedArray(_XdrClass, list):
-    def __init__(self, arg):
-        a = list(arg)
-        if len(a) != self.size:
+class FixedArray(_XdrClass, tuple):
+    def __new__(cls, arg):
+        a = tuple(arg)
+        if len(a) != cls.size:
             raise ValueError('Invalid number of elements')
-        super().__init__((self.element_type(x) for x in a))
+        return super().__new__(cls, (cls.element_type(x) for x in a))
     
     def pack(self):
         return b''.join(e.pack() for e in self)
@@ -184,12 +184,12 @@ class FixedArray(_XdrClass, list):
         return cls(data), source
             
 
-class VarArray(_XdrClass, list):
-    def __init__(self, arg):
-        a = list(arg)
-        if len(a) > self.size:
+class VarArray(_XdrClass, tuple):
+    def __new__(cls, arg):
+        a = tuple(arg)
+        if len(a) > cls.size:
             raise ValueError('Invalid number of elements')
-        super().__init__((self.element_type(x) for x in a))
+        return super().__new__(cls, (cls.element_type(x) for x in a))
     
     def pack(self):
         return Int32u(len(self)).pack() + b''.join(e.pack() for e in self)
