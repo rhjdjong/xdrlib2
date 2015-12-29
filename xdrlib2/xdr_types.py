@@ -11,17 +11,21 @@ block_size = 4
 endian = '>'  # Big-endian format character for struct.pack
 
 
-def _pack(fmt, *vars):
+def _pack(fmt, *args):
     try:
-        return struct.pack(fmt, *vars)
+        return struct.pack(fmt, *args)
     except struct.error as e:
         raise ValueError("Packing error") from e
 
 def _unpack(fmt, source):
+    size = struct.calcsize(fmt)
+    
     try:
-        return struct.unpack(fmt, source)
+        tup = struct.unpack_from(fmt, source)
     except struct.error as e:
         raise ValueError("Unpacking error") from e
+    
+    return tup, source[size:]
 
     
 class _bounded_int(int):
@@ -36,8 +40,15 @@ class _packable:
     
     @classmethod
     def unpack(cls, source):
-        tup = _unpack(cls.packfmt, source)
-        return cls(tup[0])
+        obj, source = cls.parse(source)
+        if len(source) > 0:
+            raise ValueError('Unpacking error: too much data')
+        return obj
+    
+    @classmethod
+    def parse(cls, source):
+        tup, source = _unpack(cls.packfmt, source)
+        return cls(tup[0]), source
 
 
 class Int32(_bounded_int, _packable):
@@ -99,13 +110,21 @@ class FixedOpaque(bytes):
     
     @classmethod
     def unpack(cls, source):
+        obj, source = cls.parse(source)
+        if len(source) > 0:
+            raise ValueError('Unpacking error: too much data')
+        return obj
+    
+    @classmethod
+    def parse(cls, source):
         padding = (block_size - cls.size % block_size) % block_size
-        tup = _unpack(cls.unpackfmt.format(cls.size, padding), source)
-        return cls(tup[0])
+        tup, source = _unpack(cls.unpackfmt.format(cls.size, padding), source)
+        return cls(tup[0]), source
+        
     
 class VarOpaque(bytes):
     packfmt = endian + 'I{0:d}s'
-    unpackfmt = endian + 'I{0:d}s{1:d}s'
+    unpackfmt = endian + '{0:d}s{1:d}s'
     
     def __new__(cls, data):
         if len(data) > cls.size:
@@ -118,9 +137,15 @@ class VarOpaque(bytes):
     
     @classmethod
     def unpack(cls, source):
-        size = Int32u.unpack(source[:4])
+        obj, source = cls.parse(source)
+        if len(source) > 0:
+            raise ValueError('Unpacking error: too much data')
+        return obj
+    
+    @classmethod
+    def parse(cls, source):
+        size, source = Int32u.parse(source)
         padding = (block_size - size % block_size) % block_size
-        tup = _unpack(cls.unpackfmt.format(size, padding), source)
-        return cls(tup[1])
-        
+        tup, source = _unpack(cls.unpackfmt.format(size, padding), source)
+        return cls(tup[0]), source
         
