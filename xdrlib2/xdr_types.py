@@ -51,35 +51,54 @@ class _packable:
         return cls(tup[0]), source
 
 
-class Int32(_bounded_int, _packable):
+class _XdrClass:
+    @classmethod
+    def unpack(cls, source):
+        obj, source = cls.parse(source)
+        if len(source) > 0:
+            raise ValueError('Unpacking error: too much data')
+        return obj
+
+    
+class _Atom(_XdrClass):
+    def pack(self):
+        return _pack(self.packfmt, self)
+    
+    @classmethod
+    def parse(cls, source):
+        tup, source = _unpack(cls.packfmt, source)
+        return cls(tup[0]), source
+
+
+class Int32(_bounded_int, _Atom):
     max = 1<<31
     min = -max
     packfmt = endian+'i'
     
         
-class Int32u(_bounded_int, _packable):
+class Int32u(_bounded_int, _Atom):
     max = 1<<32
     min = 0
     packfmt = endian+'I'
 
     
-class Int64(_bounded_int, _packable):
+class Int64(_bounded_int, _Atom):
     max = 1<<63
     min = -max
     packfmt = endian+'q'
     
         
-class Int64u(_bounded_int, _packable):
+class Int64u(_bounded_int, _Atom):
     max = 1<<64
     min = 0
     packfmt = endian+'Q'
     
 
-class Float32(float, _packable):
+class Float32(float, _Atom):
     packfmt = endian+'f'
     
     
-class Float64(float, _packable):
+class Float64(float, _Atom):
     packfmt = endian+'d'
     
 
@@ -95,7 +114,7 @@ FALSE = Boolean.FALSE
 TRUE = Boolean.TRUE   
 
 
-class FixedOpaque(bytes):
+class _FixedBytes(_XdrClass, bytes):
     packfmt = endian + '{0:d}s'
     unpackfmt = endian + '{0:d}s{1:d}s'
     
@@ -109,20 +128,13 @@ class FixedOpaque(bytes):
         return _pack(self.packfmt.format(self.size + padding), self)
     
     @classmethod
-    def unpack(cls, source):
-        obj, source = cls.parse(source)
-        if len(source) > 0:
-            raise ValueError('Unpacking error: too much data')
-        return obj
-    
-    @classmethod
     def parse(cls, source):
         padding = (block_size - cls.size % block_size) % block_size
         tup, source = _unpack(cls.unpackfmt.format(cls.size, padding), source)
         return cls(tup[0]), source
-        
-    
-class VarOpaque(bytes):
+
+
+class _VarBytes(_XdrClass, bytes):
     packfmt = endian + 'I{0:d}s'
     unpackfmt = endian + '{0:d}s{1:d}s'
     
@@ -132,15 +144,8 @@ class VarOpaque(bytes):
         return super().__new__(cls, data)
     
     def pack(self):
-        packsize = block_size * (len(self) // block_size + 1)
-        return struct.pack(self.packfmt.format(packsize), len(self), self)
-    
-    @classmethod
-    def unpack(cls, source):
-        obj, source = cls.parse(source)
-        if len(source) > 0:
-            raise ValueError('Unpacking error: too much data')
-        return obj
+        padding = (block_size - len(self) % block_size) % block_size
+        return _pack(self.packfmt.format(len(self) + padding), len(self), self)
     
     @classmethod
     def parse(cls, source):
@@ -148,4 +153,54 @@ class VarOpaque(bytes):
         padding = (block_size - size % block_size) % block_size
         tup, source = _unpack(cls.unpackfmt.format(size, padding), source)
         return cls(tup[0]), source
+
         
+class FixedOpaque(_FixedBytes):
+    pass
+    
+class VarOpaque(_VarBytes):
+    pass
+
+class String(_VarBytes):
+    pass
+
+
+class FixedArray(_XdrClass, list):
+    def __init__(self, arg):
+        a = list(arg)
+        if len(a) != self.size:
+            raise ValueError('Invalid number of elements')
+        super().__init__((self.element_type(x) for x in a))
+    
+    def pack(self):
+        return b''.join(e.pack() for e in self)
+    
+    @classmethod
+    def parse(cls, source):
+        data = []
+        for _ in range(cls.size):
+            item, source = cls.element_type.parse(source)
+            data.append(item)
+        return cls(data), source
+            
+
+class VarArray(_XdrClass, list):
+    def __init__(self, arg):
+        a = list(arg)
+        if len(a) > self.size:
+            raise ValueError('Invalid number of elements')
+        super().__init__((self.element_type(x) for x in a))
+    
+    def pack(self):
+        return Int32u(len(self)).pack() + b''.join(e.pack() for e in self)
+    
+    @classmethod
+    def parse(cls, source):
+        size, source = Int32u.parse(source)
+        data = []
+        for _ in range(size):
+            item, source = cls.element_type.parse(source)
+            data.append(item)
+        return cls(data), source
+            
+            
