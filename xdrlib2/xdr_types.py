@@ -27,83 +27,89 @@ def _unpack(fmt, source):
     
     return tup, source[size:]
 
+
+def pack(obj):
+    return obj._pack()
+
+def unpack(cls, source):
+    return cls._unpack(source)
+
+def parse(cls, source):
+    return cls._parse(source)
+
     
+       
 class _bounded_int(int):
     def __new__(cls, value):
-        if cls.min <= value < cls.max:
+        if cls._min <= value < cls._max:
             return super().__new__(cls, value)
         raise ValueError('Value out of range')
-
-class _packable:    
-    def pack(self):
-        return _pack(self.packfmt, self) # + self.padding
-    
-    @classmethod
-    def unpack(cls, source):
-        obj, source = cls.parse(source)
-        if len(source) > 0:
-            raise ValueError('Unpacking error: too much data')
-        return obj
-    
-    @classmethod
-    def parse(cls, source):
-        tup, source = _unpack(cls.packfmt, source)
-        return cls(tup[0]), source
 
 
 class _XdrClass:
     @classmethod
-    def unpack(cls, source):
-        obj, source = cls.parse(source)
+    def _unpack(cls, source):
+        obj, source = cls._parse(source)
         if len(source) > 0:
             raise ValueError('Unpacking error: too much data')
         return obj
 
+    @classmethod
+    def _parse(cls, source):
+        raise NotImplementedError
+    
+    def _pack(self):
+        raise NotImplementedError
+    
     
 class _Atom(_XdrClass):
-    def pack(self):
-        return _pack(self.packfmt, self)
+    def _pack(self):
+        return _pack(self._packfmt, self)
     
     @classmethod
-    def parse(cls, source):
-        tup, source = _unpack(cls.packfmt, source)
+    def _parse(cls, source):
+        tup, source = _unpack(cls._packfmt, source)
         return cls(tup[0]), source
 
 
 class Int32(_bounded_int, _Atom):
-    max = 1<<31
-    min = -max
-    packfmt = endian+'i'
+    _max = 1<<31
+    _min = -_max
+    _packfmt = endian+'i'
     
         
 class Int32u(_bounded_int, _Atom):
-    max = 1<<32
-    min = 0
-    packfmt = endian+'I'
+    _max = 1<<32
+    _min = 0
+    _packfmt = endian+'I'
 
     
 class Int64(_bounded_int, _Atom):
-    max = 1<<63
-    min = -max
-    packfmt = endian+'q'
+    _max = 1<<63
+    _min = -_max
+    _packfmt = endian+'q'
     
         
 class Int64u(_bounded_int, _Atom):
-    max = 1<<64
-    min = 0
-    packfmt = endian+'Q'
+    _max = 1<<64
+    _min = 0
+    _packfmt = endian+'Q'
     
 
 class Float32(float, _Atom):
-    packfmt = endian+'f'
+    _packfmt = endian+'f'
     
     
 class Float64(float, _Atom):
-    packfmt = endian+'d'
+    _packfmt = endian+'d'
     
 
 class Enumeration(Int32, enum.Enum):
     pass
+
+
+def enumeration(name, **kwargs):
+    return Enumeration(name, kwargs)
 
 
 class Boolean(Enumeration):
@@ -113,94 +119,72 @@ class Boolean(Enumeration):
 FALSE = Boolean.FALSE
 TRUE = Boolean.TRUE   
 
-
-class _FixedBytes(_XdrClass, bytes):
-    packfmt = endian + '{0:d}s'
-    unpackfmt = endian + '{0:d}s{1:d}s'
+class _Bytes(_XdrClass, bytes):
+    _packfmt = endian + '{0:d}s'
+    _unpackfmt = endian + '{0:d}s{1:d}s'
     
     def __new__(cls, data):
-        if len(data) != cls.size:
+        data_size = len(data)
+        if data_size > cls._size or cls._fixed and data_size < cls._size:
             raise ValueError('Incorrect data size')
         return super().__new__(cls, data)
     
-    def pack(self):
-        padding = (block_size - self.size % block_size) % block_size
-        return _pack(self.packfmt.format(self.size + padding), self)
+    def _pack(self):
+        size = len(self)
+        padded_size = ((size+block_size-1)//block_size)*block_size
+        result = b''  if self._fixed else Int32u(size)._pack()
+        return result + _pack(self._packfmt.format(padded_size), self)
     
     @classmethod
-    def parse(cls, source):
-        padding = (block_size - cls.size % block_size) % block_size
-        tup, source = _unpack(cls.unpackfmt.format(cls.size, padding), source)
-        return cls(tup[0]), source
-
-
-class _VarBytes(_XdrClass, bytes):
-    packfmt = endian + 'I{0:d}s'
-    unpackfmt = endian + '{0:d}s{1:d}s'
-    
-    def __new__(cls, data):
-        if len(data) > cls.size:
-            raise ValueError('Incorrect data size')
-        return super().__new__(cls, data)
-    
-    def pack(self):
-        padding = (block_size - len(self) % block_size) % block_size
-        return _pack(self.packfmt.format(len(self) + padding), len(self), self)
-    
-    @classmethod
-    def parse(cls, source):
-        size, source = Int32u.parse(source)
+    def _parse(cls, source):
+        if cls._fixed:
+            size = cls._size
+        else:
+            size, source = Int32u._parse(source)
         padding = (block_size - size % block_size) % block_size
-        tup, source = _unpack(cls.unpackfmt.format(size, padding), source)
+        tup, source = _unpack(cls._unpackfmt.format(size, padding), source)
         return cls(tup[0]), source
-
         
-class FixedOpaque(_FixedBytes):
-    pass
     
-class VarOpaque(_VarBytes):
-    pass
+class FixedOpaque(_Bytes):
+    _fixed = True
+    
+class VarOpaque(_Bytes):
+    _fixed = False
 
-class String(_VarBytes):
-    pass
+class String(_Bytes):
+    _fixed = False
 
 
-class FixedArray(_XdrClass, tuple):
+class _Array(_XdrClass, tuple):
     def __new__(cls, arg):
         a = tuple(arg)
-        if len(a) != cls.size:
-            raise ValueError('Invalid number of elements')
-        return super().__new__(cls, (cls.element_type(x) for x in a))
+        data_size = len(a)
+        if data_size > cls._size or cls._fixed and data_size < cls._size:
+            raise ValueError('Incorrect number of elements')
+        return super().__new__(cls, (cls._element_type(x) for x in a))
     
-    def pack(self):
-        return b''.join(e.pack() for e in self)
-    
-    @classmethod
-    def parse(cls, source):
-        data = []
-        for _ in range(cls.size):
-            item, source = cls.element_type.parse(source)
-            data.append(item)
-        return cls(data), source
-            
-
-class VarArray(_XdrClass, tuple):
-    def __new__(cls, arg):
-        a = tuple(arg)
-        if len(a) > cls.size:
-            raise ValueError('Invalid number of elements')
-        return super().__new__(cls, (cls.element_type(x) for x in a))
-    
-    def pack(self):
-        return Int32u(len(self)).pack() + b''.join(e.pack() for e in self)
+    def _pack(self):
+        result = b''  if self._fixed else Int32u(len(self))._pack()
+        return result + b''.join(e._pack() for e in self)
     
     @classmethod
-    def parse(cls, source):
-        size, source = Int32u.parse(source)
+    def _parse(cls, source):
+        if cls._fixed:
+            size = cls._size
+        else:
+            size, source = Int32u._parse(source)
         data = []
         for _ in range(size):
-            item, source = cls.element_type.parse(source)
+            item, source = cls._element_type._parse(source)
             data.append(item)
         return cls(data), source
             
+
+class FixedArray(_Array):
+    _fixed = True
+            
+
+class VarArray(_Array):
+    _fixed = False
             
