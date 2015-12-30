@@ -273,7 +273,7 @@ class TestUnion(unittest.TestCase):
     def test_simple_union(self):
         u1 = self.SimpleUnion(1, None)
         u2 = self.SimpleUnion(number=0xffeeddccbbaa)
-        u3 = self.SimpleUnion(discr=3, string=b'hallo')
+        u3 = self.SimpleUnion(string=b'hallo')
         u4 = self.SimpleUnion('foo', 13)
         u5 = self.SimpleUnion(255, b'dumb')
         self.assertRaises(ValueError, self.SimpleUnion(unknown=18))

@@ -281,6 +281,17 @@ class Structure(_XdrClass, metaclass=_StructureMeta):
             result[name] = obj
         return cls(**result), source
 
+class Void(_XdrClass):
+    def __new__(cls, _=None):
+        return super().__new__(cls)
+    
+    def _pack(self):
+        return b''
+    
+    @classmethod
+    def _parse(cls, source):
+        return cls(), source
+     
 
 class _UnionMeta(type):
     def __new__(cls, name, bases, dct):
@@ -316,7 +327,10 @@ class _UnionMeta(type):
                 except ValueError:
                     raise RuntimeError('Invalid name/type specification for union variant {}'.format(d))
             else:
-                name, typ = v.__name__, v
+                if v is None:
+                    name, typ = '', Void
+                else:
+                    name, typ = v.__name__, v
             if (not isinstance(name, str) or
                 not issubclass(typ, _XdrClass)):
                 raise RuntimeError('Invalid name/type specification for union variant {}'.format(d))
@@ -333,7 +347,6 @@ class _UnionMeta(type):
         
         return super().__new__(cls, name, bases, dct)
             
-    
 class Union(_XdrClass, metaclass=_UnionMeta):
     
     def __init__(self, *args, **kwargs):
@@ -348,29 +361,67 @@ class Union(_XdrClass, metaclass=_UnionMeta):
         if len(args) + len(kwargs) > 2:
             raise ValueError("Too many arguments for union construction")
         if len(args) > 0:
+            # Arguments are either (name, value) or (discriminant, value)
             a0 = args[0]
             if isinstance(a0, str):
+                # arguments are <name>, <value>
                 variant_name = a0
                 try:
                     discriminant, variant_type = self._variant_by_name[variant_name]
                 except KeyError:
                     raise ValueError('Invalid variant name: {}'.format(variant_name))
             else:
+                # arguments are <discriminant>, <value>
                 discriminant = a0
                 try:
                     variant_name, variant_type = self._variant_by_id[discriminant]
                 except KeyError:
-                    if None in _variant_by_id:
+                    if None in self._variant_by_id:
                         variant_name, variant_type = self._variant_by_id[None]
                     else:
                         raise ValueError('Invalid discriminant value: {}'.format(discriminant))
             
-                if a1 in self._variant_name
-                
-            discriminator = discr_type(args[0])
-            variant_name, variant_type = self._variant_info(discriminator)
+            if variant_type is not None:
+                if len(args) > 1:
+                    variant_value = variant_type(args[1])
+                else:
+                    raise ValueError('Missing union value for discriminant {}'.format(discriminant))
+            else:
+                variant_value = None
         else:
+            # Argument must consists of one <name>=<value> pair
+            if len(kwargs) > 1:
+                raise ValueError('Too many union values')
+            variant_name, value = list(kwargs.items())[0]
             try:
-                discriminator = kwargs[discr_name]
+                discriminant, variant_type = self._variant_by_name[variant_name]
             except KeyError:
-                                 
+                raise ValueError('Invalid variant name {}'.format(variant_name))
+            else:
+                variant_value = variant_type(value)
+        
+        self._discriminant = self._discriminant_type(discriminant)
+        self._value = variant_value
+        self._name = variant_name
+    
+    def __getattr__(self, name):
+        if name == self._name:
+            return self._variant
+        raise AttributeError('Invalid variant name')
+    
+    def __eq__(self, other):
+        if self.__class__ != other.__class__:
+            return False
+        return (self._discriminant == other._discriminant and
+                self._value == other._value and
+                self._name == other._name)
+    
+    def _pack(self):
+        return self._discriminant._pack() + self._value._pack()
+    
+    @classmethod
+    def _parse(cls, source):
+        discriminant, source = cls._discriminant_type._parse(source)
+        variant_type = cls._variant_by_id[discriminant][1]
+        variant, source = variant_type._parse(source)
+        return cls(discriminant, variant), source
