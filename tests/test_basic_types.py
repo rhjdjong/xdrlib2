@@ -98,6 +98,16 @@ class TestIntegers(unittest.TestCase):
             with self.assertRaises(ValueError):
                 xdrlib2.Int64u(v)
 
+    def test_integer_class_construction(self):
+        my_int32 = xdrlib2.Int32Type('my_int32')
+        my_int32u = xdrlib2.Int32uType('my_int32u')
+        my_int64 = xdrlib2.Int64Type('my_int64')
+        my_int64u = xdrlib2.Int64uType('my_int64u')
+        self.assertTrue(issubclass(my_int32, xdrlib2.Int32))
+        self.assertTrue(issubclass(my_int32u, xdrlib2.Int32u))
+        self.assertTrue(issubclass(my_int64, xdrlib2.Int64))
+        self.assertTrue(issubclass(my_int64u, xdrlib2.Int64u))
+
 
 class TestFloats(unittest.TestCase):
     def test_regular_float32(self):
@@ -243,6 +253,13 @@ class TestFloats(unittest.TestCase):
             packed = p.to_bytes(8, 'big')
             self.assertTrue(math.isnan(unpack(xdrlib2.Float64, packed)))
                 
+    def test_float_class_construction(self):
+        my_float32 = xdrlib2.Float32Type('my_float32')
+        my_float64 = xdrlib2.Float64Type('my_flaot64')
+        self.assertTrue(issubclass(my_float32, xdrlib2.Float32))
+        self.assertTrue(issubclass(my_float64, xdrlib2.Float64))
+    
+
 
 class TestEnumeration(unittest.TestCase):
     class Colors(xdrlib2.Enumeration):
@@ -269,8 +286,8 @@ class TestEnumeration(unittest.TestCase):
         self.assertEqual(self.Colors(5), self.Colors.BLUE)
         self.assertRaises(ValueError, self.Colors, 10)
     
-    def test_enum_factory(self):
-        my_enum = xdrlib2.Enumeration('my_enum', dict(a=1, b=2, c=3))
+    def test_enum_class_construction(self):
+        my_enum = xdrlib2.EnumerationType('my_enum', a=1, b=2, c=3)
         self.assertTrue(issubclass(my_enum, xdrlib2.Enumeration))
         self.assertIn(xdrlib2.Enumeration, my_enum.__mro__)
         self.assertEqual(my_enum(1), my_enum.a)
@@ -278,8 +295,8 @@ class TestEnumeration(unittest.TestCase):
         self.assertEqual(pack(my_enum.c), b'\0\0\0\x03')
         self.assertEqual(unpack(my_enum, b'\0\0\0\x01'), my_enum.a)
     
-    def test_possible_name_conflicts(self):
-        my_enum = xdrlib2.Enumeration('my_enum', dict(pack=1, parse=2, unpack=3))
+    def test_enum_class_construction_with_possible_name_conflicts(self):
+        my_enum = xdrlib2.EnumerationType('my_enum', pack=1, parse=2, unpack=3)
         self.assertEqual(my_enum.pack, 1)
         self.assertEqual(my_enum(2), my_enum.parse)
         self.assertEqual(my_enum(my_enum.unpack), 3)
