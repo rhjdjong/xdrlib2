@@ -287,7 +287,10 @@ class Void(_XdrClass):
     
     def _pack(self):
         return b''
-    
+
+    def __eq__(self, other):
+        return (other is None or isinstance(other, Void))
+                
     @classmethod
     def _parse(cls, source):
         return cls(), source
@@ -348,7 +351,6 @@ class _UnionMeta(type):
         return super().__new__(cls, name, bases, dct)
             
 class Union(_XdrClass, metaclass=_UnionMeta):
-    
     def __init__(self, *args, **kwargs):
         try:
             self._discriminant_name
@@ -373,13 +375,7 @@ class Union(_XdrClass, metaclass=_UnionMeta):
             else:
                 # arguments are <discriminant>, <value>
                 discriminant = a0
-                try:
-                    variant_name, variant_type = self._variant_by_id[discriminant]
-                except KeyError:
-                    if None in self._variant_by_id:
-                        variant_name, variant_type = self._variant_by_id[None]
-                    else:
-                        raise ValueError('Invalid discriminant value: {}'.format(discriminant))
+                variant_name, variant_type = self._get_data_by_id(discriminant)
             
             if variant_type is not None:
                 if len(args) > 1:
@@ -404,10 +400,27 @@ class Union(_XdrClass, metaclass=_UnionMeta):
         self._value = variant_value
         self._name = variant_name
     
+    @classmethod
+    def _get_data_by_id(cls, id):
+        try:
+            return cls._variant_by_id[id]
+        except KeyError:
+            if None in cls._variant_by_id:
+                return cls._variant_by_id[None]
+            else:
+                raise ValueError('Invalid discriminant value: {}'.format(id))
+    
     def __getattr__(self, name):
         if name == self._name:
-            return self._variant
+            return self._value
+        if name == self._discriminant_name:
+            return self._discriminant
         raise AttributeError('Invalid variant name')
+    
+    def __getitem__(self, index):
+        if index == self._discriminant:
+            return self._value
+        raise KeyError('Invalid variant index')
     
     def __eq__(self, other):
         if self.__class__ != other.__class__:
@@ -422,6 +435,6 @@ class Union(_XdrClass, metaclass=_UnionMeta):
     @classmethod
     def _parse(cls, source):
         discriminant, source = cls._discriminant_type._parse(source)
-        variant_type = cls._variant_by_id[discriminant][1]
+        variant_type = cls._get_data_by_id(discriminant)[1]
         variant, source = variant_type._parse(source)
         return cls(discriminant, variant), source
