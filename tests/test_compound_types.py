@@ -258,6 +258,27 @@ class TestStructure(unittest.TestCase):
                                        ))
                          )
         self.assertEqual(unpack(self.SimpleStructure, bp), s)
+    
+    def test_structure_type_construction(self):
+        c = xdrlib2.StructureType('c',
+                                  ('n', xdrlib2.Int32),
+                                  ('s', xdrlib2.StringType('s', 5)),
+                                  ('t', xdrlib2.FixedArrayType('t', size=5,
+                                                               element_type=xdrlib2.VarOpaqueType('_', 3))))
+        s = c(n=3, s=b'hallo', t=(b'abc', b'de', b'f', b'', b'ghi'))
+        bp = pack(s)
+        self.assertEqual(bp, b''.join((b'\0\0\0\x03',
+                                       b'\0\0\0\x05hallo\0\0\0',
+                                       b''.join((b'\0\0\0\x03abc\0',
+                                                 b'\0\0\0\x02de\0\0',
+                                                 b'\0\0\0\x01f\0\0\0',
+                                                 b'\0\0\0\0',
+                                                 b'\0\0\0\x03ghi\0'
+                                                 ))
+                                       ))
+                         )
+        self.assertEqual(unpack(c, bp), s)
+        
 
 class TestVoid(unittest.TestCase):
     def test_void(self):
@@ -272,90 +293,102 @@ class TestVoid(unittest.TestCase):
         self.assertEqual(bp1, b'')
         self.assertEqual(unpack(xdrlib2.Void, bp1), v2)
         
+        
 class TestUnion(unittest.TestCase):
     class SimpleUnion(xdrlib2.Union):
-        _discriminant = xdrlib2.Int32Type('discr')
-        _variants = {1: None,
-                     2: ('number', xdrlib2.Int64),
-                     3: xdrlib2.StringType('string', 10),
-                     4: ('foo', xdrlib2.Int32uType('bar')),
-                     None: ('default', xdrlib2.FixedOpaqueType('_', 4))
-                     }
-    
-    class SimpleUnionFromEnum(xdrlib2.Union):
-        _discriminant = xdrlib2.EnumerationType('discr', a=1, b=2, c=3)
-        _variants = {1: None,
-                     2: ('number', xdrlib2.Int32),
-                     3: ('logic', xdrlib2.Boolean)}
-        
-    
+        discriminant = ('discr', xdrlib2.Int32)
+        variants = {1: None,
+                    2: ('number', xdrlib2.Int64),
+                    3: xdrlib2.StringType('name', 10),
+                    4: ('foo', xdrlib2.Int32uType('bar')),
+                    'default': ('whatever', xdrlib2.FixedOpaqueType('_', 4)),
+                    }
+     
+    SimpleUnionFromEnum = xdrlib2.UnionType('SimpleUnionFromEnum',
+                                            discriminant=('discr', xdrlib2.EnumerationType('discr', a=1, b=2, c=3)),
+                                            variants={1: None, 2: ('number', xdrlib2.Int32), 3: ('logic', xdrlib2.Boolean)})
+     
     def test_simple_union_invalid_initialization(self):
         self.assertRaises(ValueError, self.SimpleUnion, unknown=18)
         self.assertRaises(ValueError, self.SimpleUnionFromEnum, 5)
-        
-    
+         
+     
     def test_simple_union_1(self):
         u = self.SimpleUnion(1, None)
-        
+        print(type(u))
+        print(repr(u))
         self.assertEqual(u.discr, 1)
         self.assertEqual(u[1], None)
-        
+         
         with self.assertRaises(AttributeError):
             u.number
         with self.assertRaises(KeyError):
             u[3]
-        
+         
         bp = pack(u)
         self.assertEqual(bp, b'\0\0\0\x01')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-        
+         
     def test_simple_union_2(self):
         u = self.SimpleUnion(number=0xffeeddccbbaa)
-        
+         
         self.assertEqual(u.discr, 2)
         self.assertEqual(u[2], 0xffeeddccbbaa)
         self.assertEqual(u.number, 0xffeeddccbbaa)
-        
+         
         bp = pack(u)
         self.assertEqual(bp, b'\0\0\0\x02\0\0\xff\xee\xdd\xcc\xbb\xaa')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-        
+         
     def test_simple_union_3(self):
-        u = self.SimpleUnion(string=b'hallo')
-        
+        u = self.SimpleUnion(name=b'hallo')
+         
         self.assertEqual(u.discr, 3)
         self.assertEqual(u[3], b'hallo')
-        self.assertEqual(u.string, b'hallo')
-
+        self.assertEqual(u.name, b'hallo')
+ 
         bp = pack(u)
-        
+         
         self.assertEqual(bp, b'\0\0\0\x03\0\0\0\x05hallo\0\0\0')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-        
+         
     def test_simple_union_4(self):
         u = self.SimpleUnion('foo', 13)
-        
+         
         self.assertEqual(u.discr, 4)
         self.assertEqual(u[4], 13)
         self.assertEqual(u.foo, 13)
-        
+         
         bp = pack(u)
         self.assertEqual(bp, b'\0\0\0\x04\0\0\0\x0d')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-        
+         
     def test_simple_union_default(self):
         u = self.SimpleUnion(255, b'dumb')
-        
+         
         self.assertEqual(u.discr, 255)
         self.assertEqual(u[255], b'dumb')
         with self.assertRaises(KeyError):
             u[100]
         self.assertEqual(u.default, b'dumb')
-        
+         
         bp = pack(u)
         self.assertEqual(bp, b'\0\0\0\xffdumb')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-           
+            
+class TestOptional(unittest.TestCase):
+    def test_optional_integer(self):
+        optInt32 = xdrlib2.Optional(xdrlib2.Int32Type('optInt32'))
+        yes = optInt32(42)
+        no = optInt32(None)
+         
+        self.assertIsInstance(yes, xdrlib2.Int32)
+        self.assertEqual(yes, 42)
+        self.assertEqual(no, None)
+        bp_yes = pack(yes)
+        bp_no = pack(no)
+        self.assertEqual(bp_yes, b'\0\0\0\x01\0\0\0\x2a')
+        self.assertEqual(bp_no, b'\0\0\0\0')
         
 
 
