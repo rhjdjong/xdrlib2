@@ -32,6 +32,8 @@ reserved_words = {'bool',
 
 _name_re = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
 def is_valid_name(name):
+    if name.startswith('*'):
+        name = name[1:]
     return True if _name_re.match(name) and not name in reserved_words else False
 
 def _methoddispatch(func):
@@ -724,12 +726,6 @@ class Union(_XdrClass, OrderedDict, metaclass=_UnionMeta):
             raise NotImplementedError('Use a Union subclass with discriminant and variants specified')
         
         return cls._get_variant_type(variant)(variant, *args, **kwargs)
-#         if variant in cls._variant_type:
-#             return cls._variant_type[variant](variant, *args, **kwargs)
-#         elif "default" in cls._variant_type:
-#             return cls._variant_type["default"](variant, *args, **kwargs)
-#         else:
-#             raise ValueError('Invalid union variant: {}'.format(variant))
 
     @classmethod
     def _get_variant_type(cls, discr):
@@ -755,14 +751,6 @@ class Union(_XdrClass, OrderedDict, metaclass=_UnionMeta):
             return self._value
         raise KeyError('Invalid variant index')
      
-#     def __eq__(self, other):
-#         if self.__class__ != other.__class__:
-#             return False
-#         return (self._discriminant == other._discriminant and
-#                 self._value == other._value and
-#                 self._name == other._name)
-#     
-     
     @classmethod
     def _parse(cls, source):
         discriminant, source = cls._d_type._parse(source)
@@ -776,18 +764,19 @@ class Union(_XdrClass, OrderedDict, metaclass=_UnionMeta):
  
 UnionType = Union.make_type
 
+
 def Optional(cls):
     opt_cls = UnionType('*'+cls.__name__,
                          discriminant=('opted', Boolean),
                          variants={FALSE: None, TRUE: ('element', cls)})
     opt_cls._original_new = opt_cls.__new__
-    def opt_new(cls, *args, **kwargs):
+    def opt_new(ocls, *args, **kwargs):
         if len(args) + len(kwargs) == 0:
-            return cls._original_new(FALSE)
+            return ocls._original_new(ocls, FALSE)
         elif len(kwargs) == 0 and len(args) == 1 and args[0] is None:
-            return cls._original_new(FALSE)
+            return ocls._original_new(ocls, FALSE)
         else:
-            return cls._original_new(TRUE, *args, **kwargs)
+            return ocls._original_new(ocls, TRUE, *args, **kwargs)
     opt_cls.__new__ = opt_new
     return opt_cls
 

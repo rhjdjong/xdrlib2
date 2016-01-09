@@ -823,21 +823,22 @@ class TestUnion(unittest.TestCase):
         bp = pack(u)
         self.assertEqual(bp, b'\0\0\0\xffdumb')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
-#             
-# class TestOptional(unittest.TestCase):
-#     def test_optional_integer(self):
-#         optInt32 = Optional(Int32Type('optInt32'))
-#         yes = optInt32(42)
-#         no = optInt32(None)
-#          
-#         self.assertIsInstance(yes, Int32)
-#         self.assertEqual(yes, 42)
-#         self.assertEqual(no, None)
-#         bp_yes = pack(yes)
-#         bp_no = pack(no)
-#         self.assertEqual(bp_yes, b'\0\0\0\x01\0\0\0\x2a')
-#         self.assertEqual(bp_no, b'\0\0\0\0')
-#         
+
+             
+class TestOptional(unittest.TestCase):
+    def test_optional_integer(self):
+        optInt32 = Optional(Int32Type('optInt32'))
+        yes = optInt32(42)
+        no = optInt32(None)
+          
+        self.assertIsInstance(yes, Int32)
+        self.assertEqual(yes, 42)
+        self.assertEqual(no, None)
+        bp_yes = pack(yes)
+        bp_no = pack(no)
+        self.assertEqual(bp_yes, b'\0\0\0\x01\0\0\0\x2a')
+        self.assertEqual(bp_no, b'\0\0\0\0')
+         
 
 
 if __name__ == "__main__":
