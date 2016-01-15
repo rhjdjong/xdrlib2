@@ -89,6 +89,21 @@ class TestOpaque(unittest.TestCase):
         self.assertRaises(ValueError, blob.extend, b'no')
         with self.assertRaises(ValueError):
             blob += b'no way'
+    
+    def test_optional_fixed_length_opaque(self):
+        optType = Optional(self.FixedLengthOpaque)
+        byte_str = b'\0\xff\xab\xcd\x01'
+        yes = optType(byte_str)
+        no = optType()
+        self.assertIsInstance(yes, self.FixedLengthOpaque)
+        self.assertEqual(yes, byte_str)
+        self.assertEqual(no, None)
+        y_b = pack(yes)
+        n_b = pack(no)
+        self.assertEqual(y_b, b'\0\0\0\x01' + byte_str + b'\0\0\0')
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, y_b), yes)
+        self.assertEqual(unpack(optType, n_b), no)
         
 
 class TestVarOpaque(unittest.TestCase):
@@ -229,6 +244,21 @@ class TestVarOpaque(unittest.TestCase):
         self.assertEqual(bp, b'\0\0\0\x05\0\xff\0\0\x01' + b'\0\0\0')
         self.assertEqual(unpack(self.VarLengthOpaque, bp), blob)
     
+    def test_optional_var_length_opaque(self):
+        optType = Optional(self.VarLengthOpaque)
+        byte_str = b'\0\xff\xab\xcd\x01'
+        yes = optType(byte_str)
+        no = optType()
+        self.assertIsInstance(yes, self.VarLengthOpaque)
+        self.assertEqual(yes, byte_str)
+        self.assertEqual(no, None)
+        y_b = pack(yes)
+        n_b = pack(no)
+        self.assertEqual(y_b, b'\0\0\0\x01' + b'\0\0\0\x05' + byte_str + b'\0\0\0')
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, y_b), yes)
+        self.assertEqual(unpack(optType, n_b), no)
+        
 
 class TestString(unittest.TestCase):
     class MyString(String):
@@ -344,6 +374,21 @@ class TestString(unittest.TestCase):
         self.assertEqual(bp, b'\0\0\0\x0f' + b'Hi there world!' + b'\0')
         self.assertEqual(unpack(self.MyString, bp), s)
     
+    def test_optional_string(self):
+        optType = Optional(self.MyString)
+        byte_str = b'Hello world!'
+        yes = optType(byte_str)
+        no = optType()
+        self.assertIsInstance(yes, self.MyString)
+        self.assertEqual(yes, byte_str)
+        self.assertEqual(no, None)
+        y_b = pack(yes)
+        n_b = pack(no)
+        self.assertEqual(y_b, b'\0\0\0\x01' + b'\0\0\0\x0c' + byte_str)
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, y_b), yes)
+        self.assertEqual(unpack(optType, n_b), no)
+        
 
 class TestFixedArray(unittest.TestCase):
     class IntArray(FixedArray):
@@ -451,6 +496,25 @@ class TestFixedArray(unittest.TestCase):
         self.assertRaises(ValueError, a.extend, [5, 6])
         with self.assertRaises(ValueError):
             a += [5, 6]
+
+    def test_optional_fixed_array(self):
+        optType = Optional(self.IntArray)
+        yes = optType(range(5))
+        no = optType()
+        self.assertIsInstance(yes, self.IntArray)
+        self.assertEqual(yes, [0, 1, 2, 3, 4])
+        self.assertEqual(no, None)
+        y_b = pack(yes)
+        n_b = pack(no)
+        self.assertEqual(y_b, b'\0\0\0\x01'+ b''.join((b'\0\0\0\0',
+                                                       b'\0\0\0\x01',
+                                                       b'\0\0\0\x02',
+                                                       b'\0\0\0\x03',
+                                                       b'\0\0\0\x04')))
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, y_b), yes)
+        self.assertEqual(unpack(optType, n_b), no)
+        
         
         
 class TestVarArray(unittest.TestCase):
@@ -628,6 +692,26 @@ class TestVarArray(unittest.TestCase):
                                        b'\0\0\0\x04')))
         self.assertEqual(unpack(self.IntArray, bp), a)
 
+    def test_optional_var_array(self):
+        optType = Optional(self.IntArray)
+        yes = optType(range(5))
+        no = optType()
+        self.assertIsInstance(yes, self.IntArray)
+        self.assertEqual(yes, [0, 1, 2, 3, 4])
+        self.assertEqual(no, None)
+        y_b = pack(yes)
+        n_b = pack(no)
+        self.assertEqual(y_b, b'\0\0\0\x01' +
+                              b'\0\0\0\x05' + 
+                              b''.join((b'\0\0\0\0',
+                                        b'\0\0\0\x01',
+                                        b'\0\0\0\x02',
+                                        b'\0\0\0\x03',
+                                        b'\0\0\0\x04')))
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, y_b), yes)
+        self.assertEqual(unpack(optType, n_b), no)
+        
         
        
 class TestStructure(unittest.TestCase):
@@ -735,6 +819,32 @@ class TestStructure(unittest.TestCase):
                          )
         self.assertEqual(unpack(self.SimpleStructure, bp), s)
          
+    def test_optional_struct(self):
+        myStruct = StructureType('myStruct',
+                                 ('n', Int32),
+                                 ('s', StringType('s', 5)),
+                                 ('t', FixedArrayType('t', size=5,
+                                                      element_type=VarOpaqueType('', 3))))
+
+        optStruct = Optional(myStruct)
+        yes = optStruct(1, b'hallo', (b'a', b'bc', b'def', b'gh', b''))
+        no = optStruct(None)
+        self.assertIsInstance(yes, myStruct)
+        self.assertEqual(no, None)
+        
+        b_yes = pack(yes)
+        b_no = pack(no)
+        self.assertEqual(b_yes, b'\0\0\0\x01'
+                                b'\0\0\0\x01'
+                                b'\0\0\0\x05hallo\0\0\0'
+                                b'\0\0\0\x01a\0\0\0'
+                                b'\0\0\0\x02bc\0\0'
+                                b'\0\0\0\x03def\0'
+                                b'\0\0\0\x02gh\0\0'
+                                b'\0\0\0\0')
+        self.assertEqual(b_no, b'\0\0\0\0')
+        self.assertEqual(unpack(optStruct, b_no), no)
+
  
 class TestVoid(unittest.TestCase):
     def test_void(self):
@@ -749,12 +859,17 @@ class TestVoid(unittest.TestCase):
         self.assertEqual(bp1, b'')
         self.assertEqual(unpack(Void, bp1), v2)
          
+    def test_optional_void(self):
+        # This test is here for documentation purposes only.
+        # The XDR specification syntax does not allow an optional void
+        pass
+
          
 class TestUnion(unittest.TestCase):
     class SimpleUnion(Union):
         discriminant = ('discr', Int32)
         variants = {1: None,
-                    2: ('number', Int64),
+                    2: ('flag', Boolean),
                     3: StringType('name', 10),
                     4: ('foo', Int32uType('bar')),
                     'default': ('whatever', FixedOpaqueType('x', 4)),
@@ -766,9 +881,29 @@ class TestUnion(unittest.TestCase):
       
     def test_simple_union_invalid_initialization(self):
         self.assertRaises(ValueError, self.SimpleUnion, 18, b'random value')
-        self.assertRaises(ValueError, self.SimpleUnionFromEnum, 5)
+        self.assertRaises(ValueError, self.SimpleUnionFromEnum, 5, b'some value')
           
-      
+    def test_simple_union_from_enum(self):
+        a = self.SimpleUnionFromEnum(1, None)
+        b = self.SimpleUnionFromEnum(2, 12345)
+        c = self.SimpleUnionFromEnum(3, True)
+        self.assertEqual(a, None)
+        self.assertIsInstance(a, Void)
+        self.assertEqual(b, 12345)
+        self.assertIsInstance(b, Int32)
+        self.assertEqual(c, True)
+        self.assertIsInstance(c, Boolean)
+        
+        b_a = pack(a)
+        b_b = pack(b)
+        b_c = pack(c)
+        self.assertEqual(b_a, b'\0\0\0\x01')
+        self.assertEqual(b_b, b'\0\0\0\x02' + pack(Int32(12345)))
+        self.assertEqual(b_c, b'\0\0\0\x03\0\0\0\x01')
+        self.assertEqual(unpack(self.SimpleUnionFromEnum, b_a), a)
+        self.assertEqual(unpack(self.SimpleUnionFromEnum, b_b), b)
+        self.assertEqual(unpack(self.SimpleUnionFromEnum, b_c), c)
+        
     def test_simple_union_1(self):
         u = self.SimpleUnion(1, None)
         self.assertIsInstance(u, Void)
@@ -781,14 +916,14 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
           
     def test_simple_union_2(self):
-        u = self.SimpleUnion(2, 0xffeeddccbbaa)
-        self.assertIsInstance(u, Int64)
-        self.assertEqual(u, 0xffeeddccbbaa)
+        u = self.SimpleUnion(2, True)
+        self.assertIsInstance(u, Boolean)
+        self.assertEqual(u, True)
         self.assertEqual(u.discr, 2)
-        self.assertEqual(u.name, 'number')
+        self.assertEqual(u.name, 'flag')
           
         bp = pack(u)
-        self.assertEqual(bp, b'\0\0\0\x02\0\0\xff\xee\xdd\xcc\xbb\xaa')
+        self.assertEqual(bp, b'\0\0\0\x02\0\0\0\x01')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
           
     def test_simple_union_3(self):
@@ -824,22 +959,45 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(bp, b'\0\0\0\xffdumb')
         self.assertEqual(unpack(self.SimpleUnion, bp), u)
 
-             
-class TestOptional(unittest.TestCase):
-    def test_optional_integer(self):
-        optInt32 = Optional(Int32Type('optInt32'))
-        yes = optInt32(42)
-        no = optInt32(None)
-          
-        self.assertIsInstance(yes, Int32)
-        self.assertEqual(yes, 42)
+    def test_optional_union(self):
+        optType = Optional(self.SimpleUnion)
+        y_1 = optType(1, None)
+        y_2 = optType(2, True)
+        y_3 = optType(3, b'hallo')
+        y_4 = optType(4, 13)
+        y_5 = optType(5, b'dumb')
+        no = optType(None)
+        self.assertEqual(y_1, None)
+        self.assertIsInstance(y_2, Boolean)
+        self.assertEqual(y_2, True)
+        self.assertIsInstance(y_3, String)
+        self.assertEqual(y_3, b'hallo')
+        self.assertIsInstance(y_4, Int32u)
+        self.assertEqual(y_4, 13)
+        self.assertIsInstance(y_5, FixedOpaque)
+        self.assertEqual(y_5, b'dumb')
         self.assertEqual(no, None)
-        bp_yes = pack(yes)
-        bp_no = pack(no)
-        self.assertEqual(bp_yes, b'\0\0\0\x01\0\0\0\x2a')
-        self.assertEqual(bp_no, b'\0\0\0\0')
-         
+        
+        b_y1 = pack(y_1)
+        b_y2 = pack(y_2)
+        b_y3 = pack(y_3)
+        b_y4 = pack(y_4)
+        b_y5 = pack(y_5)
+        b_no = pack(no)
+        self.assertEqual(b_y1, b'\0\0\0\x01' b'\0\0\0\x01')
+        self.assertEqual(b_y2, b'\0\0\0\x01' b'\0\0\0\x02' b'\0\0\0\x01')
+        self.assertEqual(b_y3, b'\0\0\0\x01' b'\0\0\0\x03' b'\0\0\0\x05' b'hallo' b'\0\0\0')
+        self.assertEqual(b_y4, b'\0\0\0\x01' b'\0\0\0\x04' b'\0\0\0\x0d')
+        self.assertEqual(b_y5, b'\0\0\0\x01' b'\0\0\0\x05' b'dumb')
+        self.assertEqual(b_no, b'\0\0\0\0')
+        self.assertEqual(unpack(optType, b_y1), y_1)
+        self.assertEqual(unpack(optType, b_y2), y_2)
+        self.assertEqual(unpack(optType, b_y3), y_3)
+        self.assertEqual(unpack(optType, b_y4), y_4)
+        self.assertEqual(unpack(optType, b_y5), y_5)
+        self.assertEqual(unpack(optType, b_no), no)
 
+             
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

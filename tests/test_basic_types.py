@@ -111,6 +111,60 @@ class TestIntegers(unittest.TestCase):
         self.assertTrue(issubclass(my_int64, Int64))
         self.assertTrue(issubclass(my_int64u, Int64u))
 
+    def test_optional_integer(self):
+        optInt32 = Optional(Int32Type('optInt32'))
+        optInt64 = Optional(Int64Type('optInt64'))
+        optInt32u = Optional(Int32uType('optInt32u'))
+        optInt64u = Optional(Int64uType('optInt32u'))
+        
+        yes_32 = optInt32(42)
+        no_32 = optInt32(None)
+        yes_64 = optInt64(42)
+        no_64 = optInt64(None)
+        yes_32u = optInt32u(42)
+        no_32u = optInt32u(None)
+        yes_64u = optInt64u(42)
+        no_64u = optInt64u(None)
+          
+        self.assertIsInstance(yes_32, Int32)
+        self.assertIsInstance(yes_64, Int64)
+        self.assertIsInstance(yes_32u, Int32u)
+        self.assertIsInstance(yes_64u, Int64u)
+        self.assertEqual(yes_32, 42)
+        self.assertEqual(yes_64, 42)
+        self.assertEqual(yes_32u, 42)
+        self.assertEqual(yes_64u, 42)
+        self.assertEqual(no_32, None)
+        self.assertEqual(no_64, None)
+        self.assertEqual(no_32u, None)
+        self.assertEqual(no_64u, None)
+        
+        bp_yes_32 = pack(yes_32)
+        bp_yes_64 = pack(yes_64)
+        bp_yes_32u = pack(yes_32u)
+        bp_yes_64u = pack(yes_64u)
+        bp_no_32 = pack(no_32)
+        bp_no_64 = pack(no_64)
+        bp_no_32u = pack(no_32u)
+        bp_no_64u = pack(no_64u)
+        self.assertEqual(bp_yes_32, b'\0\0\0\x01\0\0\0\x2a')
+        self.assertEqual(bp_yes_64, b'\0\0\0\x01\0\0\0\0\0\0\0\x2a')
+        self.assertEqual(bp_yes_32u, b'\0\0\0\x01\0\0\0\x2a')
+        self.assertEqual(bp_yes_64u, b'\0\0\0\x01\0\0\0\0\0\0\0\x2a')
+        self.assertEqual(bp_no_32, b'\0\0\0\0')
+        self.assertEqual(bp_no_64, b'\0\0\0\0')
+        self.assertEqual(bp_no_32u, b'\0\0\0\0')
+        self.assertEqual(bp_no_64u, b'\0\0\0\0')
+        
+        self.assertEqual(unpack(optInt32, bp_yes_32), yes_32)
+        self.assertEqual(unpack(optInt32, bp_no_32), no_32)
+        self.assertEqual(unpack(optInt64, bp_yes_64), yes_64)
+        self.assertEqual(unpack(optInt64, bp_no_64), no_64)
+        self.assertEqual(unpack(optInt32u, bp_yes_32u), yes_32u)
+        self.assertEqual(unpack(optInt32u, bp_no_32u), no_32u)
+        self.assertEqual(unpack(optInt64u, bp_yes_64u), yes_64u)
+        self.assertEqual(unpack(optInt64u, bp_no_64u), no_64u)
+    
 
 class TestFloats(unittest.TestCase):
     def test_regular_float32(self):
@@ -274,6 +328,37 @@ class TestFloats(unittest.TestCase):
         self.assertTrue(issubclass(my_float32, Float32))
         self.assertTrue(issubclass(my_float64, Float64))
     
+    def test_optional_float32(self):
+        optFloat32 = Optional(Float32Type('optFloat32'))
+        yes = optFloat32(42.0)
+        no = optFloat32(None)
+          
+        self.assertIsInstance(yes, Float32)
+        self.assertEqual(yes, 42.0)
+        self.assertEqual(no, None)
+        bp_yes = pack(yes)
+        bp_no = pack(no)
+        self.assertEqual(bp_yes, b'\0\0\0\x01'+pack(Float32(42.0)))
+        self.assertEqual(bp_no, b'\0\0\0\0')
+        self.assertEqual(unpack(optFloat32, bp_yes), yes)
+        self.assertEqual(unpack(optFloat32, bp_no), no)
+    
+    def test_optional_float64(self):
+        optFloat64 = Optional(Float64Type('optFloat64'))
+        yes = optFloat64(42.0)
+        no = optFloat64(None)
+          
+        self.assertIsInstance(yes, Float64)
+        self.assertEqual(yes, 42.0)
+        self.assertEqual(no, None)
+        bp_yes = pack(yes)
+        bp_no = pack(no)
+        self.assertEqual(bp_yes, b'\0\0\0\x01'+pack(Float64(42.0)))
+        self.assertEqual(bp_no, b'\0\0\0\0')
+        self.assertEqual(unpack(optFloat64, bp_yes), yes)
+        self.assertEqual(unpack(optFloat64, bp_no), no)
+    
+
 
 
 class TestEnumeration(unittest.TestCase):
@@ -320,6 +405,32 @@ class TestEnumeration(unittest.TestCase):
         self.assertEqual(pack(my_enum(1)), b'\0\0\0\x01')
         self.assertEqual(unpack(my_enum, b'\0\0\0\x03'), my_enum.unpack)
         
+    def test_optional_enum(self):
+        myEnum = EnumerationType('myEnum', red=1, blue=2, green=4)
+        optEnum = Optional(myEnum)
+        red = optEnum(1)
+        blue = optEnum(2)
+        green = optEnum(4)
+        no = optEnum()
+        
+        self.assertIsInstance(red, myEnum)
+        self.assertIsInstance(blue, myEnum)
+        self.assertIsInstance(green, myEnum)
+        self.assertEqual(no, None)
+        
+        b_red = pack(red)
+        b_blue = pack(blue)
+        b_green = pack(green)
+        b_no = pack(no)
+        self.assertEqual(b_red, b'\0\0\0\x01\0\0\0\x01')
+        self.assertEqual(b_blue, b'\0\0\0\x01\0\0\0\x02')
+        self.assertEqual(b_green, b'\0\0\0\x01\0\0\0\x04')
+        self.assertEqual(b_no, b'\0\0\0\0')
+        self.assertEqual(unpack(optEnum, b_red), red)
+        self.assertEqual(unpack(optEnum, b_blue), blue)
+        self.assertEqual(unpack(optEnum, b_green), green)
+        self.assertEqual(unpack(optEnum, b_no), no)
+         
         
                     
 class TestBoolean(unittest.TestCase):
@@ -349,6 +460,26 @@ class TestBoolean(unittest.TestCase):
         self.assertEqual(Boolean(1), TRUE)
         self.assertRaises(ValueError, Boolean, 2)
 
+    def test_optional_boolean(self):
+        optBool = Optional(Boolean)
+        f = optBool(False)
+        t = optBool(True)
+        o = optBool()
+        
+        self.assertIsInstance(f, Boolean)
+        self.assertIsInstance(t, Boolean)
+        self.assertEqual(o, None)
+        
+        b_f = pack(f)
+        b_t = pack(t)
+        b_o = pack(o)
+        self.assertEqual(b_f, b'\0\0\0\x01\0\0\0\x00')
+        self.assertEqual(b_t, b'\0\0\0\x01\0\0\0\x01')
+        self.assertEqual(b_o, b'\0\0\0\0')
+        self.assertEqual(unpack(optBool, b_f), f)
+        self.assertEqual(unpack(optBool, b_t), t)
+        self.assertEqual(unpack(optBool, b_o), o)
+         
 
 
 if __name__ == "__main__":

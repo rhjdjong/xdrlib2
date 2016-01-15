@@ -105,134 +105,134 @@ class _XdrClass:
     def __eq__(self, other):
         return super().__eq__(other)
 
-    def __add__(self, other):
-        return self.__class__(super().__add__(other))
+#     def __add__(self, other):
+#         return self.__class__(super().__add__(other))
+#     
+#     def __sub__(self, other):
+#         return self.__class__(super().__sub__(other))
+#     
+#     def __mul__(self, other):
+#         return self.__class__(super().__mul__(other))
+#     
+#     def __matmul__(self, other):
+#         return self.__class__(super().__matmul__(other))
+#     
+#     def __truediv__(self, other):
+#         return self.__class__(super().__truediv__(other))
+#     
+#     def __floordiv__(self, other):
+#         return self.__class__(super().__floordiv__(other))
+#     
+#     def __mod__(self, other):
+#         return self.__class__(super().__mod__(other))
+#     
+#     def __pow__(self, *args):
+#         return self.__class__(super().__pow__(*args))
+# 
+#     def __lshift__(self, other):
+#         return self.__class__(super().__lshift__(other))
+#     
+#     def __rshift__(self, other):
+#         return self.__class__(super().__rshift__(other))
+#     
+#     def __and__(self, other):
+#         return self.__class__(super().__and__(other))
+#     
+#     def __xor__(self, other):
+#         return self.__class__(super().__xor__(other))
+#     
+#     def __or__(self, other):
+#         return self.__class__(super().__or__(other))
+#     
+#     def __radd__(self, other):
+#         return self.__class__(super().__radd__(other))
+#     
+#     def __rsub__(self, other):
+#         return self.__class__(super().__rsub__(other))
+#     
+#     def __rmul__(self, other):
+#         return self.__class__(super().__rmul__(other))
+#     
+#     def __rmatmul__(self, other):
+#         return self.__class__(super().__rmatmul__(other))
+#     
+#     def __rtruediv__(self, other):
+#         return self.__class__(super().__rtruediv__(other))
+#     
+#     def __rfloordiv__(self, other):
+#         return self.__class__(super().__rfloordiv__(other))
+#     
+#     def __rmod__(self, other):
+#         return self.__class__(super().__rmod__(other))
+#     
+#     def __rpow__(self, *args):
+#         return self.__class__(super().__rpow__(*args))
+# 
+#     def __rlshift__(self, other):
+#         return self.__class__(super().__rlshift__(other))
+#     
+#     def __rrshift__(self, other):
+#         return self.__class__(super().__rrshift__(other))
+#     
+#     def __rand__(self, other):
+#         return self.__class__(super().__rand__(other))
+#     
+#     def __rxor__(self, other):
+#         return self.__class__(super().__rxor__(other))
+#     
+#     def __ror__(self, other):
+#         return self.__class__(super().__ror__(other))
     
-    def __sub__(self, other):
-        return self.__class__(super().__sub__(other))
-    
-    def __mul__(self, other):
-        return self.__class__(super().__mul__(other))
-    
-    def __matmul__(self, other):
-        return self.__class__(super().__matmul__(other))
-    
-    def __truediv__(self, other):
-        return self.__class__(super().__truediv__(other))
-    
-    def __floordiv__(self, other):
-        return self.__class__(super().__floordiv__(other))
-    
-    def __mod__(self, other):
-        return self.__class__(super().__mod__(other))
-    
-    def __pow__(self, *args):
-        return self.__class__(super().__pow__(*args))
-
-    def __lshift__(self, other):
-        return self.__class__(super().__lshift__(other))
-    
-    def __rshift__(self, other):
-        return self.__class__(super().__rshift__(other))
-    
-    def __and__(self, other):
-        return self.__class__(super().__and__(other))
-    
-    def __xor__(self, other):
-        return self.__class__(super().__xor__(other))
-    
-    def __or__(self, other):
-        return self.__class__(super().__or__(other))
-    
-    def __radd__(self, other):
-        return self.__class__(super().__radd__(other))
-    
-    def __rsub__(self, other):
-        return self.__class__(super().__rsub__(other))
-    
-    def __rmul__(self, other):
-        return self.__class__(super().__rmul__(other))
-    
-    def __rmatmul__(self, other):
-        return self.__class__(super().__rmatmul__(other))
-    
-    def __rtruediv__(self, other):
-        return self.__class__(super().__rtruediv__(other))
-    
-    def __rfloordiv__(self, other):
-        return self.__class__(super().__rfloordiv__(other))
-    
-    def __rmod__(self, other):
-        return self.__class__(super().__rmod__(other))
-    
-    def __rpow__(self, *args):
-        return self.__class__(super().__rpow__(*args))
-
-    def __rlshift__(self, other):
-        return self.__class__(super().__rlshift__(other))
-    
-    def __rrshift__(self, other):
-        return self.__class__(super().__rrshift__(other))
-    
-    def __rand__(self, other):
-        return self.__class__(super().__rand__(other))
-    
-    def __rxor__(self, other):
-        return self.__class__(super().__rxor__(other))
-    
-    def __ror__(self, other):
-        return self.__class__(super().__ror__(other))
-    
-    def __iadd__(self, other):
-        return self.__class__(super().__iadd__(other))
-    
-    def __isub__(self, other):
-        return self.__class__(super().__isub__(other))
-    
-    def __imul__(self, other):
-        return self.__class__(super().__imul__(other))
-    
-    def __imatmul__(self, other):
-        return self.__class__(super().__imatmul__(other))
-    
-    def __itruediv__(self, other):
-        return self.__class__(super().__itruediv__(other))
-    
-    def __ifloordiv__(self, other):
-        return self.__class__(super().__ifloordiv__(other))
-    
-    def __imod__(self, other):
-        return self.__class__(super().__imod__(other))
-    
-    def __ipow__(self, *args):
-        return self.__class__(super().__ipow__(*args))
-
-    def __ilshift__(self, other):
-        return self.__class__(super().__ilshift__(other))
-    
-    def __irshift__(self, other):
-        return self.__class__(super().__irshift__(other))
-    
-    def __iand__(self, other):
-        return self.__class__(super().__iand__(other))
-    
-    def __ixor__(self, other):
-        return self.__class__(super().__ixor__(other))
-    
-    def __ior__(self, other):
-        return self.__class__(super().__ior__(other))
-    
-    def __neg__(self):
-        return self.__class__(super().__neg__())
-    
-    def __pos__(self):
-        return self.__class__(super().__pos__())
-    
-    def __abs__(self):
-        return self.__class__(super().__abs__())
-    
-    def __invert__(self):
-        return self.__class__(super().__invert__())
+#     def __iadd__(self, other):
+#         return self.__class__(super().__iadd__(self.__class__(other)))
+#     
+#     def __isub__(self, other):
+#         return self.__class__(super().__isub__(self.__class__(other)))
+#     
+#     def __imul__(self, other):
+#         return self.__class__(super().__imul__(self.__class__(other)))
+#     
+#     def __imatmul__(self, other):
+#         return self.__class__(super().__imatmul__(self.__class__(other)))
+#     
+#     def __itruediv__(self, other):
+#         return self.__class__(super().__itruediv__(self.__class__(other)))
+#     
+#     def __ifloordiv__(self, other):
+#         return self.__class__(super().__ifloordiv__(self.__class__(other)))
+#     
+#     def __imod__(self, other):
+#         return self.__class__(super().__imod__(self.__class__(other)))
+#     
+#     def __ipow__(self, *args):
+#         return self.__class__(super().__ipow__(*(self.__class__(_) for _ in args)))
+# 
+#     def __ilshift__(self, other):
+#         return self.__class__(super().__ilshift__(self.__class__(other)))
+#     
+#     def __irshift__(self, other):
+#         return self.__class__(super().__irshift__(self.__class__(other)))
+#     
+#     def __iand__(self, other):
+#         return self.__class__(super().__iand__(self.__class__(other)))
+#     
+#     def __ixor__(self, other):
+#         return self.__class__(super().__ixor__(self.__class__(other)))
+#     
+#     def __ior__(self, other):
+#         return self.__class__(super().__ior__(self.__class__(other)))
+#     
+#     def __neg__(self):
+#         return self.__class__(super().__neg__())
+#     
+#     def __pos__(self):
+#         return self.__class__(super().__pos__())
+#     
+#     def __abs__(self):
+#         return self.__class__(super().__abs__())
+#     
+#     def __invert__(self):
+#         return self.__class__(super().__invert__())
     
 
     @classmethod
@@ -261,9 +261,9 @@ class _Atomic(_XdrClass):
     
 class _Integer(_Atomic):
     def __new__(cls, value):
-        if cls._min <= value < cls._max:
-            return super().__new__(cls, value)
-        raise ValueError('Value out of range')
+        if type(value) is cls:
+            return value
+        return super().__new__(cls, value)
     
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -274,7 +274,15 @@ class _Integer(_Atomic):
     def __invert__(self):
         return self.__class__(self._max - self._min - 1 - self)
         
-
+class _Float(_Atomic):
+    def __new__(cls, value):
+        if type(value) is cls:
+            return value
+        return super().__new__(cls, value)
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        
 class Int32(_bounded_int, _Integer):
     _max = 1<<31
     _min = -_max
@@ -305,13 +313,13 @@ class Int64u(_bounded_int, _Integer):
 Int64uType = Int64u.make_type
 
 
-class Float32(float, _Atomic):
+class Float32(float, _Float):
     _packfmt = endian+'f'
     
 Float32Type = Float32.make_type
 
     
-class Float64(float, _Integer):
+class Float64(float, _Float):
     _packfmt = endian+'d'
 
 Float64Type = Float64.make_type
@@ -319,16 +327,27 @@ Float64Type = Float64.make_type
 class _EnumerationMeta(type):
     def __new__(cls, name, bases, dct):
         members = {}
+        # Retain enum definitions from the base class(es)
+        for base in bases:
+            try:
+                members.update(base._members)
+            except AttributeError:
+                pass
         for n, v in dct.items():
             if not is_valid_name(n): continue
             if callable(v): continue
             if isinstance(v, (classmethod, staticmethod)): continue
+            if n in members:
+                raise ValueError('Redefinition of enumeration name {}'.format(n))
             try:
                 members[n] = Int32(v)
             except (ValueError, TypeError):
                 raise ValueError('Invalid enumeration value for name {}: {}'.format(n, v))
         for n in members:
-            del dct[n]    
+            try:
+                del dct[n]
+            except KeyError:
+                pass   
         dct['_members'] = members
         dct['_values'] = set(members.values())
         return super().__new__(cls, name, bases, dct)
@@ -376,6 +395,29 @@ class _Seq(_XdrClass):
     def _delslice(self, sl):
         self.check_size(len(self) - len(self[sl]))
         super().__delitem__(sl)
+
+    def __iadd__(self, other):
+        lst = list(other)
+        self.check_size(len(self)+len(lst))
+        return self.__class__(super().__iadd__(other))
+    
+    def __add__(self, other):
+        lst = list(other)
+        self.check_size(len(self)+len(lst))
+        return self.__class__(super().__add__(other))
+    
+    def __imul__(self, number):
+        self.check_size(len(self)*number)
+        return self.__class__(super().__imul__(number))
+    
+    def __mul__(self, number):
+        self.check_size(len(self)*number)
+        return self.__class__(super().__mul__(number))
+    
+    
+        
+    
+    
 
     
 class _Bytes(_Seq, bytearray):
@@ -485,6 +527,10 @@ class _Array(_Seq, list):
         self.check_size(len(self)+len(it))
         super().extend(self._element_type(x) for x in it)
     
+#     def __iadd__(self, other):
+#         self.extend(other)
+#         
+    
     @_methoddispatch
     def __setitem__(self, index, value):
         super().__setitem__(index, self._element_type(value))
@@ -540,11 +586,20 @@ VarArrayType = VarArray.make_type
 class _StructureMeta(type):
     def __new__(cls, name, bases, dct):
         members = OrderedDict()
+        # Retain enum definitions from the base class(es)
+        for base in bases:
+            try:
+                members.update(base._members)
+            except AttributeError:
+                pass
         for n, v in dct.items():
             if not is_valid_name(n): continue
             members[n] = v
         for n in members:
-            del dct[n]
+            try:
+                del dct[n]
+            except KeyError:
+                pass
         dct['_members'] = members
         return super().__new__(cls, name, bases, dct)
     
@@ -555,6 +610,15 @@ class _StructureMeta(type):
         
 class Structure(_XdrClass, OrderedDict, metaclass=_StructureMeta):
     def __init__(self, *args, **kwargs):
+        if len(kwargs) == 0 and len(args) == 1:
+            v = args[0]
+            if v is self:
+                return
+            if isinstance(v, self.__class__):
+                for name in self._members:
+                    self[name] = v[name]
+                return
+        
         sentinel = object()
         for name in self._members:
             self[name] = sentinel
@@ -594,7 +658,7 @@ class Structure(_XdrClass, OrderedDict, metaclass=_StructureMeta):
         return super().__eq__(other)
     
     def _pack(self):
-        return b''.join(self[n]._pack() for n in self)
+        return b''.join(self[n]._pack() for n in self._members)
     
     @classmethod
     def _parse(cls, source):
@@ -613,12 +677,8 @@ StructureType = Structure.make_type
 
 
 class Void(_XdrClass):
-    _instance = None
-    
-    def __new__(cls, _=None):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+    def __new__(cls, arg=None):
+        return super().__new__(cls)
     
     def __init__(self, _=None):
         super().__init__()
@@ -770,16 +830,41 @@ def Optional(cls):
                          discriminant=('opted', Boolean),
                          variants={FALSE: None, TRUE: ('element', cls)})
     opt_cls._original_new = opt_cls.__new__
+    
     def opt_new(ocls, *args, **kwargs):
         if len(args) + len(kwargs) == 0:
             return ocls._original_new(ocls, FALSE)
-        elif len(kwargs) == 0 and len(args) == 1 and args[0] is None:
+        if len(kwargs) == 0 and len(args) == 1 and args[0] == None:
             return ocls._original_new(ocls, FALSE)
-        else:
-            return ocls._original_new(ocls, TRUE, *args, **kwargs)
+        return ocls._original_new(ocls, TRUE, *args, **kwargs)
+    
+    @classmethod
+    def opt_parse(ocls, source):
+        discriminant, source = ocls._d_type._parse(source)
+        v_type = ocls._get_variant_type(discriminant)
+        variant, source = v_type._parse(source)
+        return ocls(variant), source
+        
     opt_cls.__new__ = opt_new
+    opt_cls._parse = opt_parse
     return opt_cls
 
+
+
+# class _opt_absent(Void):
+#     def _pack(self):
+#         return TRUE._pack()
+#     
+#     
+# def Optional(cls):
+#     def opt_new(ocls, *args, **kwargs):
+#         if len(args) + len(kwargs) == 0:
+#             return None
+#         if len(kwargs) == 0 and len(args) == 1 and args[0] is None:
+#             return None
+#         return ocls._original()
+#     opt_cls = type('*'+cls.__name__, (), {'_original': cls})
+    
 # def Optional(cls):
 #     opt_cls = UnionType('*'+cls.__name__, ('opted', Boolean), {FALSE: None, TRUE: ('element', cls)})
 #     opt_cls._original_new = opt_cls.__new__
