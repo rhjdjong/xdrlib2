@@ -6,54 +6,23 @@ Created on 28 dec. 2015
 
 import struct
 import re
+import inspect
 
 from functools import singledispatch, update_wrapper
 from collections import OrderedDict
 
-reserved_words = {'bool',
-                   'case',
-                   'const',
-                   'default',
-                   'double',
-                   'quadruple',
-                   'enum',
-                   'float',
-                   'hyper',
-                   'int',
-                   'opaque',
-                   'string',
-                   'struct',
-                   'switch',
-                   'typedef',
-                   'union',
-                   'unsigned',
-                   'void',
-                   }
+from .xdr_base import block_size, endian, _is_valid_name
 
-_name_re = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
-def is_valid_name(name):
-    if name.startswith('*'):
-        name = name[1:]
-    return True if _name_re.match(name) and not name in reserved_words else False
+__all__ = ['Int32',
+           'Int32u',
+           'Int64',
+           'Int64u',
+           'Float32',
+           'Float64',
+           'Float128',
+           'Enumeration',
+           ]
 
-def _methoddispatch(func):
-    dispatcher = singledispatch(func)
-    def wrapper(*args, **kw):
-        return dispatcher.dispatch(args[1].__class__)(*args, **kw)
-    wrapper.register = dispatcher.register
-    update_wrapper(wrapper, dispatcher)
-    return wrapper
-
-
-block_size = 4
-endian = '>'  # Big-endian format character for struct.pack
-
-
-def _pack(fmt, *args):
-    try:
-        return struct.pack(fmt, *args)
-    except struct.error as e:
-        raise ValueError("Packing error") from e
 
 def _unpack(fmt, source):
     size = struct.calcsize(fmt)
@@ -66,275 +35,124 @@ def _unpack(fmt, source):
     return tup, source[size:]
 
 
-def pack(obj):
-    return obj._pack()
-
-def unpack(cls, source):
-    return cls._unpack(source)
-
-def parse(cls, source):
-    return cls._parse(source)
-
+class XdrObject():
+    def encode(self):
+        raise NotImplementedError
     
-       
-class _bounded_int(int):
-    def __new__(cls, value):
-        if cls._min <= value < cls._max:
-            return super().__new__(cls, value)
-        raise ValueError('Value out of range')
-
-
-class _XdrClass:
     @classmethod
-    def _unpack(cls, source):
-        obj, source = cls._parse(source)
+    def decode(cls, source):
+        obj, source = cls.parse(source)
         if len(source) > 0:
             raise ValueError('Unpacking error: too much data')
         return obj
 
     @classmethod
-    def _parse(cls, source):
+    def parse(cls, source):
         raise NotImplementedError
-    
-    def _pack(self):
-        raise NotImplementedError
-    
-    def __repr__(self):
-        return ':'.join((self.__class__.__name__, super().__repr__()))
-    
-    def __eq__(self, other):
-        return super().__eq__(other)
-
-#     def __add__(self, other):
-#         return self.__class__(super().__add__(other))
-#     
-#     def __sub__(self, other):
-#         return self.__class__(super().__sub__(other))
-#     
-#     def __mul__(self, other):
-#         return self.__class__(super().__mul__(other))
-#     
-#     def __matmul__(self, other):
-#         return self.__class__(super().__matmul__(other))
-#     
-#     def __truediv__(self, other):
-#         return self.__class__(super().__truediv__(other))
-#     
-#     def __floordiv__(self, other):
-#         return self.__class__(super().__floordiv__(other))
-#     
-#     def __mod__(self, other):
-#         return self.__class__(super().__mod__(other))
-#     
-#     def __pow__(self, *args):
-#         return self.__class__(super().__pow__(*args))
-# 
-#     def __lshift__(self, other):
-#         return self.__class__(super().__lshift__(other))
-#     
-#     def __rshift__(self, other):
-#         return self.__class__(super().__rshift__(other))
-#     
-#     def __and__(self, other):
-#         return self.__class__(super().__and__(other))
-#     
-#     def __xor__(self, other):
-#         return self.__class__(super().__xor__(other))
-#     
-#     def __or__(self, other):
-#         return self.__class__(super().__or__(other))
-#     
-#     def __radd__(self, other):
-#         return self.__class__(super().__radd__(other))
-#     
-#     def __rsub__(self, other):
-#         return self.__class__(super().__rsub__(other))
-#     
-#     def __rmul__(self, other):
-#         return self.__class__(super().__rmul__(other))
-#     
-#     def __rmatmul__(self, other):
-#         return self.__class__(super().__rmatmul__(other))
-#     
-#     def __rtruediv__(self, other):
-#         return self.__class__(super().__rtruediv__(other))
-#     
-#     def __rfloordiv__(self, other):
-#         return self.__class__(super().__rfloordiv__(other))
-#     
-#     def __rmod__(self, other):
-#         return self.__class__(super().__rmod__(other))
-#     
-#     def __rpow__(self, *args):
-#         return self.__class__(super().__rpow__(*args))
-# 
-#     def __rlshift__(self, other):
-#         return self.__class__(super().__rlshift__(other))
-#     
-#     def __rrshift__(self, other):
-#         return self.__class__(super().__rrshift__(other))
-#     
-#     def __rand__(self, other):
-#         return self.__class__(super().__rand__(other))
-#     
-#     def __rxor__(self, other):
-#         return self.__class__(super().__rxor__(other))
-#     
-#     def __ror__(self, other):
-#         return self.__class__(super().__ror__(other))
-    
-#     def __iadd__(self, other):
-#         return self.__class__(super().__iadd__(self.__class__(other)))
-#     
-#     def __isub__(self, other):
-#         return self.__class__(super().__isub__(self.__class__(other)))
-#     
-#     def __imul__(self, other):
-#         return self.__class__(super().__imul__(self.__class__(other)))
-#     
-#     def __imatmul__(self, other):
-#         return self.__class__(super().__imatmul__(self.__class__(other)))
-#     
-#     def __itruediv__(self, other):
-#         return self.__class__(super().__itruediv__(self.__class__(other)))
-#     
-#     def __ifloordiv__(self, other):
-#         return self.__class__(super().__ifloordiv__(self.__class__(other)))
-#     
-#     def __imod__(self, other):
-#         return self.__class__(super().__imod__(self.__class__(other)))
-#     
-#     def __ipow__(self, *args):
-#         return self.__class__(super().__ipow__(*(self.__class__(_) for _ in args)))
-# 
-#     def __ilshift__(self, other):
-#         return self.__class__(super().__ilshift__(self.__class__(other)))
-#     
-#     def __irshift__(self, other):
-#         return self.__class__(super().__irshift__(self.__class__(other)))
-#     
-#     def __iand__(self, other):
-#         return self.__class__(super().__iand__(self.__class__(other)))
-#     
-#     def __ixor__(self, other):
-#         return self.__class__(super().__ixor__(self.__class__(other)))
-#     
-#     def __ior__(self, other):
-#         return self.__class__(super().__ior__(self.__class__(other)))
-#     
-#     def __neg__(self):
-#         return self.__class__(super().__neg__())
-#     
-#     def __pos__(self):
-#         return self.__class__(super().__pos__())
-#     
-#     def __abs__(self):
-#         return self.__class__(super().__abs__())
-#     
-#     def __invert__(self):
-#         return self.__class__(super().__invert__())
-    
 
     @classmethod
-    def make_type(cls, name, *args, **kwargs):
-        if not isinstance(name, str) or name and not is_valid_name(name):
+    def make(cls, name, *args, **kwargs):
+        if not isinstance(name, str) or name and not _is_valid_name(name):
             raise ValueError('Invalid name for derived class: {}'.format(name))
         return cls.__class__(name, (cls,), cls._make_class_dictionary(*args, **kwargs))
     
-    @classmethod
-    def _make_class_dictionary(cls, *args, **kwargs):
-        raise NotImplementedError
-
-class _Atomic(_XdrClass):
-    def _pack(self):
-        return _pack(self._packfmt, self)
+    
+class _Atomic(XdrObject):
+    def encode(self):
+        return struct.pack(self._fmt, self)
     
     @classmethod
-    def _parse(cls, source):
-        tup, source = _unpack(cls._packfmt, source)
+    def parse(cls, source):
+        tup, source = _unpack(cls._fmt, source)
         return cls(tup[0]), source
-    
+
     @classmethod
     def _make_class_dictionary(cls, *args, **kwargs):
         return {}
+
     
-    
-class _Integer(_Atomic):
-    def __new__(cls, value):
-        if type(value) is cls:
-            return value
+class _bounded_int(int):
+    def __new__(cls, value=0):
+        v = super().__new__(cls, value)
+        if cls._min <= v < cls._max:
+            return v
+        raise ValueError('Value out of range for class {}: {}'.format(cls.__name__, v))
+
+
+class _Integer(_bounded_int, _Atomic):
+    pass
+
+
+class _Float(float, _Atomic):
+    def __new__(cls, value=0.0):
         return super().__new__(cls, value)
     
     def __init__(self, *args, **kwargs):
         super().__init__()
-        
-    def __index__(self):
-        return int(self)
+
     
-    def __invert__(self):
-        return self.__class__(self._max - self._min - 1 - self)
-        
-class _Float(_Atomic):
-    def __new__(cls, value):
-        if type(value) is cls:
-            return value
-        return super().__new__(cls, value)
+class Int32(_Integer):
+    '''Representation of an XDR signed integer.
     
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        
-class Int32(_bounded_int, _Integer):
-    _max = 1<<31
-    _min = -_max
-    _packfmt = endian+'i'
+    Int32 is a subclass of :class:`int` that accepts values in the range [-2\ :sup:`31`\ , 2\ :sup:`31`\ -1]. Default value is 0.
+    Encoded values are 4 bytes long.
+    '''
+    _min = -2**31
+    _max = 2**31
+    _fmt = endian+'i'
     
-Int32Type = Int32.make_type   
         
-class Int32u(_bounded_int, _Integer):
-    _max = 1<<32
+class Int32u(_Integer):
+    '''Representation of an XDR unsigned integer.
+    
+    Int32u is a subclass of :class:`int` that accepts values in the range [0, 2\ :sup:`32`\ -1]. Default value is 0.
+    Encoded values are 4 bytes long.
+    '''
     _min = 0
-    _packfmt = endian+'I'
+    _max = 2**32
+    _fmt = endian+'I'
 
-Int32uType = Int32u.make_type
     
-class Int64(_bounded_int, _Integer):
-    _max = 1<<63
-    _min = -_max
-    _packfmt = endian+'q'
+class Int64(_Integer):
+    '''Representation of an XDR signed hyper integer.
     
-Int64Type = Int64.make_type
+    Int64 is a subclass of :class:`int` that accepts values in the range [-2\ :sup:`63`\ , 2\ :sup:`63`\ -1]. Default value is 0.
+    Encoded values are 8 bytes long.
+    '''
+    _min = -2**63
+    _max = 2**63
+    _fmt = endian+'q'
 
-        
-class Int64u(_bounded_int, _Integer):
-    _max = 1<<64
+
+class Int64u(_Integer):
+    '''Representation of an XDR unsigned hyper integer.
+    
+    Int64u is a subclass of :class:`int` that accepts values in the range [0, 2\ :sup:`64`\ -1]. Default value is 0.
+    Encoded values are 8 bytes long.
+    '''
     _min = 0
-    _packfmt = endian+'Q'
-    
-Int64uType = Int64u.make_type
+    _max = 2**64
+    _fmt = endian+'Q'
 
 
-class Float32(float, _Float):
-    _packfmt = endian+'f'
-    
-Float32Type = Float32.make_type
-
-    
-class Float64(float, _Float):
-    _packfmt = endian+'d'
-
-Float64Type = Float64.make_type
-    
-class _EnumerationMeta(type):
+class _Enumeration_meta(type):
     def __new__(cls, name, bases, dct):
+        # Find the global namespace where this class is being instantiated
+        frame_list = inspect.getouterframes(inspect.currentframe())
+        for frame_info in frame_list:
+            if frame_info.function == '<module>':
+                glob = frame_info.frame.f_globals
+                break
+        else:
+            raise RuntimeError('Cannot determine module namespace')
+
         members = {}
         # Retain enum definitions from the base class(es)
         for base in bases:
-            try:
+            if hasattr(base, '_members'):
                 members.update(base._members)
-            except AttributeError:
-                pass
         for n, v in dct.items():
-            if not is_valid_name(n): continue
+            if not _is_valid_name(n): continue
             if callable(v): continue
             if isinstance(v, (classmethod, staticmethod)): continue
             if n in members:
@@ -343,537 +161,210 @@ class _EnumerationMeta(type):
                 members[n] = Int32(v)
             except (ValueError, TypeError):
                 raise ValueError('Invalid enumeration value for name {}: {}'.format(n, v))
+            if n in glob:
+                raise ValueError('Enumeration member name {} already present in global namespace'
+                                 .format(n))
+            glob[n] = v
+            
         for n in members:
             try:
                 del dct[n]
             except KeyError:
-                pass   
+                pass
         dct['_members'] = members
         dct['_values'] = set(members.values())
+        
         return super().__new__(cls, name, bases, dct)
     
     def __getattr__(self, name):
         try:
             return self._members[name]
         except KeyError:
-            raise ValueError('Invalid name for enumeration class {}: {}'.format(self.__name__, name))
+            raise AttributeError("'{}' object has no attribute '{}'"
+                             .format(self.__class__.__name__, name))
+
+            
+class Enumeration(Int32, metaclass=_Enumeration_meta):
+    def __new__(cls, value=None):
+        if not cls._members:
+            raise NotImplementedError('Base {} class cannot be instantiated, only derived classes.'
+                                      .format(cls.__class__.__name__))
+        if value is None:
+            value = min(cls._values)
+        if value not in cls._values:
+            raise ValueError("Inavlid value for '{}' object: '{}'"
+                             .format(cls.__class__.__name__, value))
+        return super().__new__(cls, value)
     
+    @classmethod
+    def _make_class_dictionary(cls, **kwargs):
+        return kwargs
+        
+        
     
-class Enumeration(Int32, metaclass=_EnumerationMeta):
-    def __new__(cls, value):
+class Float32(_Float):
+    '''Representation of an XDR floating-point value.
+    
+    Float32 is a subclass of :class:`float`. Default value is 0.0.
+    Encoded values are 4 bytes long. Note that encoding a Python float
+    as Float32 will in general result in loss of precision.
+    '''
+    _fmt = endian+'f'
+    
+            
+class Float64(_Float):
+    '''Representation of an XDR double-precision floating-point value.
+    
+    Float64 is a subclass of :class:`float`. Default value is 0.0.
+    Encoded values are 8 bytes long. Note that encoding a Python float
+    as Float32 will in general *not* result in loss of precision.
+    '''
+    _fmt = endian+'d'
+    
+
+class Float128(_Float):            
+    '''Representation of an XDR quadruple-precision floating-point value.
+    
+    Float128 is a subclass of :class:`float`. Default value is 0.0.
+    Encoded values are 16 bytes long.
+    
+    Python does not natively support quadruple-precision floating point values.
+    Decoded quadruple-precision floating point values are converted into Python floats,
+    which in general involves loss of precision.
+    However, When decoded values are not modified, they can be encoded again without
+    loss of precision.
+    '''
+    
+    _byteorder = 'big' if endian == '>' else 'little'
+    
+    def __new__(cls, value=0.0):
         v = super().__new__(cls, value)
-        if v in cls._members.values():
-            return v
-        raise ValueError('Invalid enumeration value for class {}: {}'.format(cls.__name__, value))
+        v._encoded = b''
+        return v
     
-    @classmethod
-    def _make_class_dictionary(cls, **kwargs):
-        return kwargs
-    
-EnumerationType = Enumeration.make_type
-
-
-class Boolean(Enumeration):
-    FALSE = 0
-    TRUE = 1
-    
-FALSE = Boolean.FALSE
-TRUE = Boolean.TRUE   
-
-class _Seq(_XdrClass):
-    def __new__(cls, data):
-        t = tuple(iter(data))
-        cls.check_size(len(t))
-        return super().__new__(cls, t)
-    
-    @_methoddispatch   
-    def __delitem__(self, index):
-        self.check_size(len(self) - 1)
-        super().__delitem__(index)
-    
-    @__delitem__.register(slice)
-    def _delslice(self, sl):
-        self.check_size(len(self) - len(self[sl]))
-        super().__delitem__(sl)
-
-    def __iadd__(self, other):
-        lst = list(other)
-        self.check_size(len(self)+len(lst))
-        return self.__class__(super().__iadd__(other))
-    
-    def __add__(self, other):
-        lst = list(other)
-        self.check_size(len(self)+len(lst))
-        return self.__class__(super().__add__(other))
-    
-    def __imul__(self, number):
-        self.check_size(len(self)*number)
-        return self.__class__(super().__imul__(number))
-    
-    def __mul__(self, number):
-        self.check_size(len(self)*number)
-        return self.__class__(super().__mul__(number))
-    
-    
-        
-    
-    
-
-    
-class _Bytes(_Seq, bytearray):
-    _packfmt = endian + '{0:d}s'
-    _unpackfmt = endian + '{0:d}s{1:d}s'
-
-#     def __new__(cls, data):
-#         t = bytes(data)
-#         cls.check_size(len(t))
-#         return super().__new__(cls, t)
-#     
-    
-    @classmethod
-    def _make_class_dictionary(cls, size):
-        return {'_size': size}
-
-    def append(self, value):
-        self.check_size(len(self)+1)
-        super().append(value)
-    
-    def extend(self, it):
-        b = bytes(iter(it))
-        self.check_size(len(self)+len(b))
-        super().extend(b)
-    
-    @_methoddispatch
-    def __setitem__(self, index, value):
-        super().__setitem__(index, value)
-    
-    @__setitem__.register(slice)
-    def _setslice(self, sl, value):
-        value = bytes(iter(value))
-        self.check_size(len(self) - len(self[sl]) + len(value))
-        super().__setitem__(sl, value)
-    
-    
-
-class _FixedBytes(_Bytes):
-    @classmethod
-    def check_size(cls, value):
-        if value != cls._size:
-            raise ValueError("Incorrect size: {}. Expected: {}".format(value, cls._size))
-    
-    def _pack(self):
-        size = len(self)
-        padded_size = ((size+block_size-1)//block_size)*block_size
-        return _pack(self._packfmt.format(padded_size), self)
-    
-    @classmethod
-    def _parse(cls, source):
-        padding = (block_size - cls._size % block_size) % block_size
-        tup, source = _unpack(cls._unpackfmt.format(cls._size, padding), source)
-        return cls(tup[0]), source
-
-    
-class _VariableBytes(_Bytes):
-    @classmethod
-    def check_size(cls, value):
-        if value > cls._size:
-            raise ValueError("Size too large: {}. Maximum is {}". format(value, cls._size))
-
-    def _pack(self):
-        size = len(self)
-        padded_size = ((size+block_size-1)//block_size)*block_size
-        return Int32u(size)._pack() + _pack(self._packfmt.format(padded_size), self)
-
-    @classmethod
-    def _parse(cls, source):
-        size, source = Int32u._parse(source)
-        padding = (block_size - size % block_size) % block_size
-        tup, source = _unpack(cls._unpackfmt.format(size, padding), source)
-        return cls(tup[0]), source
-
-
-class FixedOpaque(_FixedBytes):
-    pass
-
-FixedOpaqueType = FixedOpaque.make_type
-
-  
-class VarOpaque(_VariableBytes):
-    pass
-
-VarOpaqueType = VarOpaque.make_type
-
-  
-class String(_VariableBytes):
-    pass
-
-StringType = String.make_type
-  
-
-class _Array(_Seq, list):
-    def __init__(self, arg):
-        super().__init__(self._element_type(x) for x in iter(arg))
-    
-    @classmethod
-    def _make_class_dictionary(cls, size, element_type):
-        return {'_size': size, '_element_type': element_type}
-    
-    def append(self, value):
-        self.check_size(len(self)+1)
-        super().append(self._element_type(value))
-    
-    def extend(self, it):
-        it = list(it)
-        self.check_size(len(self)+len(it))
-        super().extend(self._element_type(x) for x in it)
-    
-#     def __iadd__(self, other):
-#         self.extend(other)
-#         
-    
-    @_methoddispatch
-    def __setitem__(self, index, value):
-        super().__setitem__(index, self._element_type(value))
-    
-    @__setitem__.register(slice)
-    def _setslice(self, sl, value):
-        value = list(value)
-        self.check_size(len(self) - len(self[sl]) + len(value))
-        super().__setitem__(sl, (self._element_type(v) for v in value))
-    
-        
-class FixedArray(_Array):
-    @classmethod
-    def check_size(cls, value):
-        if value != cls._size:
-            raise ValueError("Incorrect size: {}. Expected: {}".format(value, cls._size))
-
-    def _pack(self):
-        return b''.join(e._pack() for e in self)
-    
-    @classmethod
-    def _parse(cls, source):
-        data = []
-        for _ in range(cls._size):
-            item, source = cls._element_type._parse(source)
-            data.append(item)
-        return cls(data), source
+    def encode(self):
+        if not self._encoded:
+            # The 'struct' module does not support quadruple-precision encoding.
+            # The best we can do is encode it as double-precision,
+            # and reformat the packed bytes to conform to the quadruple-precicsion
+            # encoding format.
             
-FixedArrayType = FixedArray.make_type
+            # First encode as double-precision, and convert the packed bytes
+            # into one single integer number
+            number = int.from_bytes(struct.pack(endian+'d', self), self._byteorder)
 
-
-class VarArray(_Array):
-    @classmethod
-    def check_size(cls, value):
-        if value > cls._size:
-            raise ValueError("Size too large: {}. Maximum is {}". format(value, cls._size))
-
-    def _pack(self):
-        return Int32u(len(self))._pack() + b''.join(e._pack() for e in self)
-    
-    @classmethod
-    def _parse(cls, source):
-        size, source = Int32u._parse(source)
-        data = []
-        for _ in range(size):
-            item, source = cls._element_type._parse(source)
-            data.append(item)
-        return cls(data), source
-            
-VarArrayType = VarArray.make_type
-
-
-class _StructureMeta(type):
-    def __new__(cls, name, bases, dct):
-        members = OrderedDict()
-        # Retain enum definitions from the base class(es)
-        for base in bases:
-            try:
-                members.update(base._members)
-            except AttributeError:
-                pass
-        for n, v in dct.items():
-            if not is_valid_name(n): continue
-            members[n] = v
-        for n in members:
-            try:
-                del dct[n]
-            except KeyError:
-                pass
-        dct['_members'] = members
-        return super().__new__(cls, name, bases, dct)
-    
-    @classmethod
-    def __prepare__(mcls, cls, bases):
-        return OrderedDict()
-
-        
-class Structure(_XdrClass, OrderedDict, metaclass=_StructureMeta):
-    def __init__(self, *args, **kwargs):
-        if len(kwargs) == 0 and len(args) == 1:
-            v = args[0]
-            if v is self:
-                return
-            if isinstance(v, self.__class__):
-                for name in self._members:
-                    self[name] = v[name]
-                return
-        
-        sentinel = object()
-        for name in self._members:
-            self[name] = sentinel
-        
-        for (name, component_type), value in zip(self._members.items(), args):
-            self[name] = component_type(value)
-        
-        for name, value in kwargs.items():
-            try:
-                component_type = self._members[name]
-            except KeyError:
-                raise ValueError('Unknown structure component: {}'.format(name))
-            self[name] = component_type(value)
-            
-        if sentinel in self.values():
-                raise ValueError('Missing initialization for component {}'.format(name))
-
-    def __getattr__(self, name):
-        if name in self:
-            return self[name]
-        return super().__getattr__(name)  
-    
-    def __setattr__(self, name, value):
-        if name in self:
-            self[name] = self._members[name](value)
-        else:
-            super().__setattr__(name, value)
-    
-    @_methoddispatch
-    def __eq__(self, other):
-        return super().__eq__(other)
-    
-    @__eq__.register(_XdrClass)
-    def __eq__(self, other):
-        if self.__class__ != other.__class__:
-            return False
-        return super().__eq__(other)
-    
-    def _pack(self):
-        return b''.join(self[n]._pack() for n in self._members)
-    
-    @classmethod
-    def _parse(cls, source):
-        result = {}
-        for name, typ in cls._members.items():
-            obj, source = typ._parse(source)
-            result[name] = obj
-        return cls(**result), source
-    
-    @classmethod
-    def _make_class_dictionary(cls, *args):
-        return OrderedDict(args)
-            
-
-StructureType = Structure.make_type
-
-
-class Void(_XdrClass):
-    def __new__(cls, arg=None):
-        return super().__new__(cls)
-    
-    def __init__(self, _=None):
-        super().__init__()
-        
-    def _pack(self):
-        return b''
-
-    def __eq__(self, other):
-        return (other is None or isinstance(other, Void))
+            # Extract sign, exponent, and fractional part from the packed bytestring
+            # Sign bit is the leftmost bit, bit 0
+            # Exponent is in the next 11 bits, bit 1 through 11
+            # Fractional part is in the rightmost 52 bits, bits 12 through 63
+            fraction = number & ((1<<52)-1)
+            number >>= 52
+            exponent = number & ((1<<11)-1)
+            number >>= 11
+            sign = number & 1
                 
-    @classmethod
-    def _parse(cls, source):
-        return cls(), source
-     
-
-class _UnionMeta(type):
-    def __new__(cls, name, bases, dct):
-        if not ('discriminant' in dct and 'variants' in dct):
-            return super().__new__(cls, name, bases, dct)
-        
-        discr = dct['discriminant']
-        if isinstance(discr, type):
-            d_name, d_type = discr.__name__, discr
-        else:
-            d_name, d_type = discr
+            # Ca;culate the sign, exponent, and fractional part for the quadruple-precision representation
+            # Sign bit is the same
+            # Exponent for double-precision is 11 bits, biased by 1023
+            # Exponent for quadruple-precision is 15 bits, biased by 16383.
+            # Fraction for quadruple-precision is 112 bits i.s.o. 52. Rightmost 60 bits are set to 0.
+            fraction <<= 60
             
-        v_info = dct['variants']
-        
-        if not isinstance(d_name, str) or d_name and not is_valid_name(d_name):
-            raise ValueError("Invalid union discriminant name: {}".format(d_name))
-        if not isinstance(d_type, type):
-            raise ValueError("Discriminant type must be a class")
-        if not issubclass(d_type, (Int32, Int32u, Enumeration)):
-            raise ValueError("Invalid type for union discriminant: {}".format(d_type))
-        if not isinstance(v_info, dict):
-            raise ValueError("Union variants must be specified as mapping "
-                            "(discriminant value) -> (variant_name, variant_type)")
-        
-        def make_variant_type(v_name, v_type):
-            class var_class(v_type):
-                def __new__(cls, variant, *args, **kwargs):
-                    obj = super().__new__(cls, *args, **kwargs)
-                    obj.discr = d_type(variant)
-                    obj.name = v_name
-                    return obj
-                
-                def __init__(self, variant, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
+            # Handle the special cases. These are indicated by an exponent that is either all ones or all zeros.
+            if exponent == 2047:
+                # NaN or infinity
+                exponent = 32767
+            elif exponent == 0:
+                # Either zero or subnormal numbers.
+                if fraction:
+                    # At least one non-zero bit. This is aubnormal number.
+                    # The absolute value is 2**(-1022) * 0.<fraction>
+                    # We need to convert this to a new exponent and fraction value
+                    # such that 2**(exponent-16383) * 1.<new-fraction> has the same value.
                     
-                def _pack(self):
-                    return self.discr._pack() + super()._pack()
-                
-                @classmethod
-                def _parse(cls, source):
-                    v_value, source = v_type._parse(source)
-                    return v_value, source
-            return var_class
-                        
-                
-        variant_type = {}
-        variant_name = {}
-        
-        for d_value, v_arm_info in v_info.items():
-            if d_value != 'default':
-                d_value = d_type(d_value)
-                
-            if v_arm_info is None:
-                v_name = ''
-                v_type = Void
-            elif isinstance(v_arm_info, type) and issubclass(v_arm_info, _XdrClass):
-                v_name, v_type = v_arm_info.__name__, v_arm_info
+                    # First left-shift the fraction until the left-most 1 bit is in the first position.
+                    shift = 0
+                    while fraction & (1<111) == 0:
+                        fraction <<= 1
+                        shift += 1
+                    # Shift one more time to get everything after the implied 1 before the fraction
+                    fraction <<= 1
+                    fraction &= (1<<112)-1
+                    shift += 1
+                    
+                    # Calculate the new exponent value.
+                    exponent = -1022 - shift + 16383
             else:
-                v_name, v_type = v_arm_info
-                if v_type is None:
-                    v_type = Void
-            if not isinstance(v_name, str) or v_name and not is_valid_name(v_name):
-                raise ValueError("Invalid name for union variant {}: {}".format(d_value, v_name))
-            if not issubclass(v_type, _XdrClass):
-                raise ValueError("Invalid type for union variant {}: {}".format(d_value, v_type))
-            variant_type[d_value] = make_variant_type(v_name, v_type)
-            variant_name[d_value] = v_name
-        
-        del dct['discriminant']
-        del dct['variants']
-        dct['_d_name'] = d_name
-        dct['_d_type'] = d_type
-        dct['_variant_type'] = variant_type
-        dct['_variant_name'] = variant_name
-    
-        return super().__new__(cls, name, bases, dct)
+                # Regular number
+                exponent += 16383 - 1023
+                    
+            # Convert again to one big number, and pack that in a 16 byte array.
+            number = (sign << 127) | (exponent << 112) | fraction
+            self._encoded = number.to_bytes(16, self._byteorder)
+        return self._encoded
 
     @classmethod
-    def __prepare__(mcls, cls, bases):
-        return OrderedDict()
-
+    def parse(cls, source):
+        # Use the first 16 bytes of the source.
+        # Mimic the bahaviour of struct.unpack if there are not enough bytes.
+        buf = source[:16]
+        if len(buf) != 16:
+            raise struct.error('unpack requires a bytes object of length 16')
+        source = source[16:]
+                    
+        # Construct a big integer from the bytes
+        number = int.from_bytes(buf, 'big')
+        
+        # Extract the sign, exponent, and fraction
+        fraction = number & ((1<<112) - 1)
+        number >>= 112
+        exponent = number & ((1<<15) - 1)
+        number >>= 15
+        sign = number & 1
+        
+#         # Truncate fraction to fit in 52 bits
+#         fraction >>= 60
+        
+        # Check for special cases
+        if exponent == 32767:
+            if fraction == 0:
+                v = '-inf' if sign else 'inf'
+            else:
+                v = '-nan' if sign else 'nan'
+        elif exponent == 0:
+            # Either zero or subnormal.
+            # But even the largeust subnormal numberin quadruple-precision
+            # is to small to represent in double-precision
+            v = -0.0 if sign else 0.0
+        else:
+            # truncate fraction to fit in 52 bits
+            fraction >>= 60
             
-class Union(_XdrClass, OrderedDict, metaclass=_UnionMeta):
-    def __new__(cls, variant, *args, **kwargs):
-        try:
-            cls._d_name
-            cls._d_type
-            cls._variant_type
-            cls._variant_name
-        except AttributeError:
-            raise NotImplementedError('Use a Union subclass with discriminant and variants specified')
-        
-        return cls._get_variant_type(variant)(variant, *args, **kwargs)
-
-    @classmethod
-    def _get_variant_type(cls, discr):
-        try:
-            return cls._variant_type[discr]
-        except KeyError:
-            if 'default' in cls._variant_type:
-                return cls._variant_type['default']
+            # Calculate exponent value for double-precision representation
+            exponent = exponent - 16383 + 1023
+            if exponent >= 2047:
+                # Too large tp be represented in a Python float
+                v = '-inf' if sign else 'inf'
+            
+            elif exponent <= 0:
+                if exponent > -52:
+                    fraction = (1 << 51) | ( fraction >> 1)
+                    fraction >>= -exponent
+                    v = (-1 if sign else 1) * fraction * 2**(-1022-52)
+                else:
+                    # Too small for a subnormal number in double-precision
+                    v = -0.0 if sign else 0.0
             else:
-                raise ValueError('Invalid discriminant value: {}'.format(id))
-      
-    def __getattr__(self, name):
-        if name == self._name:
-            return self._value
-        if name == self._d_name:
-            return self._d_value
-        if name == 'default' and self._d_value not in self._variants:
-            return self._value
-        raise AttributeError('Invalid variant name')
-     
-    def __getitem__(self, index):
-        if index == self._d_value:
-            return self._value
-        raise KeyError('Invalid variant index')
-     
-    @classmethod
-    def _parse(cls, source):
-        discriminant, source = cls._d_type._parse(source)
-        v_type = cls._get_variant_type(discriminant)
-        variant, source = v_type._parse(source)
-        return cls(discriminant, variant), source
-
-    @classmethod
-    def _make_class_dictionary(cls, **kwargs):
-        return kwargs
- 
-UnionType = Union.make_type
-
-
-def Optional(cls):
-    opt_cls = UnionType('*'+cls.__name__,
-                         discriminant=('opted', Boolean),
-                         variants={FALSE: None, TRUE: ('element', cls)})
-    opt_cls._original_new = opt_cls.__new__
-    
-    def opt_new(ocls, *args, **kwargs):
-        if len(args) + len(kwargs) == 0:
-            return ocls._original_new(ocls, FALSE)
-        if len(kwargs) == 0 and len(args) == 1 and args[0] == None:
-            return ocls._original_new(ocls, FALSE)
-        return ocls._original_new(ocls, TRUE, *args, **kwargs)
-    
-    @classmethod
-    def opt_parse(ocls, source):
-        discriminant, source = ocls._d_type._parse(source)
-        v_type = ocls._get_variant_type(discriminant)
-        variant, source = v_type._parse(source)
-        return ocls(variant), source
+                # This fits in a regular double-precision number
+                v = (-1 if sign else 1) * ((1 << 52) | fraction) * 2**(exponent-1023-52)
         
-    opt_cls.__new__ = opt_new
-    opt_cls._parse = opt_parse
-    return opt_cls
-
-
-
-# class _opt_absent(Void):
-#     def _pack(self):
-#         return TRUE._pack()
-#     
-#     
-# def Optional(cls):
-#     def opt_new(ocls, *args, **kwargs):
-#         if len(args) + len(kwargs) == 0:
-#             return None
-#         if len(kwargs) == 0 and len(args) == 1 and args[0] is None:
-#             return None
-#         return ocls._original()
-#     opt_cls = type('*'+cls.__name__, (), {'_original': cls})
+        v = cls(v)
+        v._encoded = buf
+        return v, source
+        
+        
     
-# def Optional(cls):
-#     opt_cls = UnionType('*'+cls.__name__, ('opted', Boolean), {FALSE: None, TRUE: ('element', cls)})
-#     opt_cls._original_new = opt_cls.__new__
-#     def opt_new(cls, *args, **kwargs):
-#         if len(args) + len(kwargs) == 0 or (len(args)>0 and args[0] is None):
-#             return cls._original_new(False)
-#         return cls._original_new(True, *args, **kwargs)
-#     opt_cls.__new__ = opt_new
-#     return opt_cls
     
+            
             
         
