@@ -4,7 +4,7 @@ Created on 29 aug. 2016
 @author: Ruud
 '''
 import re
-
+from functools import singledispatch, update_wrapper
 
 block_size = 4
 '''The XDR basic block size is 4 bytes. All XDR data elements are encoded to a byte sequence with a length that is a multiple of the basic block size.
@@ -31,8 +31,6 @@ _reserved_words = {'bool',
                    'union',
                    'unsigned',
                    'void',
-                   'FALSE',
-                   'TRUE',
                    }
 
 _name_re = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')
@@ -42,3 +40,11 @@ def _is_valid_name(name):
         name = name[1:]
     return True if _name_re.match(name) and not name in _reserved_words else False
 
+def _methoddispatch(func):
+    dispatcher = singledispatch(func)
+    def wrapper(*args, **kwargs):
+        return dispatcher.dispatch(args[1].__class__)(*args, **kwargs)
+    wrapper.register = dispatcher.register
+    update_wrapper(wrapper, dispatcher)
+    return wrapper
+    

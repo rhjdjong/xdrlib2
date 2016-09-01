@@ -5,7 +5,7 @@ Created on 28 dec. 2015
 '''
 import unittest
 
-from xdrlib2 import block_size, endian
+from xdrlib2 import *
 
 class TestPackageStructure(unittest.TestCase):
     def test_can_access_xdrlib2(self):
@@ -13,6 +13,27 @@ class TestPackageStructure(unittest.TestCase):
         self.assertIsInstance(endian, str)
 
 
+class TestVoid(unittest.TestCase):
+    def test_void(self):
+        v1 = Void()
+        v2 = Void(None)
+        self.assertEqual(v1, v2)
+        self.assertEqual(v1, None)
+          
+        bp1 = encode(v1)
+        bp2 = encode(v2)
+        self.assertEqual(bp1, bp2)
+        self.assertEqual(bp1, b'')
+        self.assertEqual(decode(Void, bp1), v2)
+          
+    def test_optional_void(self):
+        # This test is here for documentation purposes only.
+        # The XDR specification syntax does not allow an optional void
+        pass
+ 
+          
+    
+    
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
