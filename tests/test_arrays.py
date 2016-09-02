@@ -268,7 +268,7 @@ class TestVarArray(unittest.TestCase):
             x += [5, 6]
     
     
-    
+   
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
