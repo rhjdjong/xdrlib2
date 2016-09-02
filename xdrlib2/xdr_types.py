@@ -7,12 +7,13 @@ Created on 28 dec. 2015
 import struct
 import re
 import inspect
+import numbers
+import collections.abc
 
 from functools import singledispatch, update_wrapper
 from collections import OrderedDict, namedtuple
 
 from .xdr_base import block_size, endian, _is_valid_name, _reserved_words, _methoddispatch
-from pip._vendor.html5lib.utils import MethodDispatcher
 
 __all__ = ['encode',
            'decode',
@@ -31,6 +32,8 @@ __all__ = ['encode',
            'VarBytes',
            'String',
            'Void',
+           'FixedArray',
+           'VarArray',
            ]
 
 # _guard is used by the magic that injects enumeration values in the
@@ -47,15 +50,13 @@ def decode(cls, source):
     return cls._decode(source)
     
     
-def _unpack(fmt, source):
-    size = struct.calcsize(fmt)
-    
+def _unpack(fmt, size, source):
+    buffer, source = _split_and_remove_padding(source, size)
     try:
-        tup = struct.unpack_from(fmt, source)
+        tup = struct.unpack_from(fmt, buffer)
     except struct.error as e:
         raise ValueError("Unpacking error") from e
-    
-    return tup, source[size:]
+    return tup, source
 
 def _pad(byte_string):
     '''Pads `byte_string` with NULL bytes, to make the length a multiple of `block_size`'''
@@ -66,17 +67,20 @@ def _pad_size(size):
     '''Return the number of NULL bytes that must be added a bytestring of length `size`'''
     return (block_size - size % block_size) % block_size
 
+def _padded_size(size):
+    return size + _pad_size(size)
+
 def _split_and_remove_padding(byte_string, size):
     '''Returns a tuple (`a`, `b`), with `a` the leading `size` bytes from `byte_string`,
     and `b` the remainder of byte_string after `a` and any padding are removed.
     Raises `ValueError` if byte_string is too short, or if the removed padding
-    contains NULL bytes.'''
-    block_size = size + _pad_size(size)
-    if block_size > len(byte_string):
+    contains non-NULL bytes.'''
+    padded_size = _padded_size(size)
+    if padded_size > len(byte_string):
         raise ValueError('Not enough data to decode')
-    if any(byte_string[size:block_size]):
+    if any(byte_string[size:padded_size]):
         raise ValueError('Non-null bytes found in padding')
-    return byte_string[:size], byte_string[block_size:]
+    return byte_string[:size], byte_string[padded_size:]
 
 
 class _MetaXdrObject(type):
@@ -93,14 +97,22 @@ class _MetaXdrObject(type):
     
     
 class XdrObject(metaclass=_MetaXdrObject):
+    def __new__(cls, *args, **kwargs):
+        cls._check_arguments(*args, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
+
     @classmethod
     def _prepare(cls, dct):
         # This method during the intitalization of class creation.
         # Subclasses are expected to override this to execute any
-        # setup that is required for the class.
+        # customization that is required for the class
         pass
     
     def _encode(self):
+        raise NotImplementedError
+
+    @property
+    def _enocded_size(self):
         raise NotImplementedError
     
     @classmethod
@@ -125,9 +137,15 @@ class Void(XdrObject):
     def __new__(cls, _=None):
         return super().__new__(cls)
     
+    @classmethod
+    def _check_arguments(cls):
+        pass
+
     def _encode(self):
         return b''
-    
+
+    _encoded_size = 0
+        
     @classmethod
     def _parse(cls, source):
         return cls(None), source
@@ -144,16 +162,20 @@ class _Atomic(XdrObject):
                 delattr(cls, name)
                 if name == 'fmt':
                     value = endian + value
-                    setattr(cls, '_size', struct.calcsize(value))
+                    setattr(cls, '_encoded_size', struct.calcsize(value))
                 setattr(cls, '_'+name, value)
-
+            
+    @classmethod
+    def _check_arguments(cls, value):
+        pass
+    
     def _encode(self):
         return _pad(struct.pack(self._fmt, self))
-    
+
     @classmethod
     def _parse(cls, source):
-        data, source = _split_and_remove_padding(source, cls._size)
-        tup, data = _unpack(cls._fmt, data)
+        data, source = _split_and_remove_padding(source, cls._encoded_size)
+        tup, data = _unpack(cls._fmt, cls._encoded_size, data)
         if data:
             raise ValueError('Too much data')
         return cls(tup[0]), source
@@ -170,11 +192,23 @@ class _Integer(_Atomic, int):
             return v
         raise ValueError('Value out of range for class {}: {}'.format(cls.__name__, v))
 
+#     @classmethod
+#     def _check_arguments(cls, value):
+#         pass
+#         if not isinstance(int(value), numbers.Integral):
+#             raise ValueError("Invalid argument type '{}' for class '{}'"
+#                              .format(type(value), cls.__name__))
+        
 
 class _Float(_Atomic, float):
     def __new__(cls, value=0.0):
         return super().__new__(cls, value)
     
+#     @classmethod
+#     def _check_arguments(cls, value):
+#         if not isinstance(float(value), numbers.Real):
+#             raise ValueError("Invalid argument type '{}' for class '{}'"
+#                              .format(type(value), cls.__name__))
 
     
 class Int32(_Integer):
@@ -236,22 +270,30 @@ class Enumeration(Int32):
     Enumeration values are encoded as :class:`Int32` values, and are 4 bytes long.
     '''
     def __new__(cls, value=None):
-        if not cls._members:
-            raise NotImplementedError('Base {} class cannot be instantiated, only derived classes.'
-                                      .format(cls.__name__))
+        if not cls._values:
+            raise NotImplementedError("Base class '{}' cannot be instantiated, only derived classes "
+                                      'with defined enumeration members.'.format(cls.__name__))
         if value is None:
             value = min(cls._values)
-        else:
-            value = super().__new__(cls, value)
-        if value not in cls._values:
-            raise ValueError("Inavlid value for '{}' enumeration object: '{}'"
-                             .format(cls.__name__, value))
-        return value
+        return super().__new__(cls, value)
     
+    @classmethod
+    def _check_arguments(cls, value):
+        if not isinstance(value, numbers.Integral):
+            raise ValueError("Invalid argument type '{}' for class '{}'"
+                             .format(type(value), cls.__name__))
+        if value not in cls._values:
+            raise ValueError("Invalid value '{}' for '{}' enumeration object."
+                             .format(value, cls.__name__))
+
     @classmethod
     def _prepare(cls, dct):
         # Consturct a dictionary of valid name, value pairs
         # from the class attributes.
+        if not hasattr(cls, '_members'):
+            cls._members = {}
+            cls._values = set()
+
         members = {}
         for name, value in dct.items():
             if name in members:
@@ -270,21 +312,24 @@ class Enumeration(Int32):
                                      .format(value, name))
                 members[name] = value
 
-        if members and cls._members:
-            raise ValueError('Cannot add new enumeration values to existing Enumeration subclass')
+        if not members:
+            # No enumeration values defined. This is either the base 'Enumeration' class
+            # or the definition of an alias for an existing Enumeration class
+            return
+        
+        if cls._members:
+            raise ValueError("Cannot add new enumeration values to Enumeration subclass '{}'. "
+                             "Existing values are '{}'".format(cls.__name__, cls._members))
         
         # Store the name and values in the class
-        # We need to have something in _members and _values, otherwise
-        # the class cannot be instantiated
-        cls._members = members
-        cls._values = set(members.values())
+        cls._values = set(members.values())  # Bootstrap with Int32 instances
+        cls._members = {name: cls(value) for name, value in members.items()}
+        cls._values = set(cls._members.values())  # Now make them 'cls' instances
         
-        # Now ensure that the values are really instances of this class
-        for name, value in members.items():
-            members[name] = cls(value)
-        cls._values = set(members.values())
-        
-        
+        # Also make the named attributes actual 'cls' instances
+        for name in members:
+            setattr(cls, name, cls._members[name])
+
         # Determine the global (module) namespace where the Enumeration class is being created.
         # The enumerated values are added to this namespace
         stack = inspect.stack()
@@ -295,18 +340,17 @@ class Enumeration(Int32):
         # stack[2] is the frame where the class is created.
         for f in stack[2:]:
             # Check if this is the typedef method defined in XdrObject
-            if f.function == '<module>':
-#                 if f.function == 'typedef' and f.frame.f_globals.get('_guard') is _guard:
-#                     continue # Try the next frame
-                global_namespace = f.frame.f_globals
-                break
+            if f.function == 'typedef' and f.frame.f_globals.get('_guard') is _guard:
+                continue # Try the next frame
+            global_namespace = f.frame.f_globals
+            break
         else:
-            # Outermost caller reached without encountering a '<module>'.
+            # Outermost caller reached.
             # Something is seriously wrong.
             raise RuntimeError('Cannot determine calling global namespace')
         
         # Add enumeration names to the global namespace
-        for name, value in members.items():
+        for name, value in cls._members.items():
             if name in global_namespace:
                 raise ValueError('Name conflict. Enumeration name {} already exists.'
                                  .format(name))
@@ -448,10 +492,7 @@ class Float128(_Float):
     def _parse(cls, source):
         # Use the first 16 bytes of the source.
         # Mimic the bahaviour of struct.unpack if there are not enough bytes.
-        buf = source[:16]
-        if len(buf) != 16:
-            raise struct.error('unpack requires a bytes object of length 16')
-        source = source[16:]
+        buf, source = _split_and_remove_padding(source, 16)
                     
         # Construct a big integer from the bytes
         number = int.from_bytes(buf, 'big')
@@ -509,6 +550,12 @@ class _Sequence(XdrObject):
         self._check_size(len(data))
         super().__init__(data)
 
+    @classmethod
+    def _check_arguments(cls, value):
+        if not isinstance(value, collections.abc.Sequence):
+            raise ValueError("Invalid argument type '{}' for class '{}'"
+                             .format(type(value), cls.__name__))
+
     @_methoddispatch
     def __delitem__(self, index):
         self._check_size(len(self) - 1)
@@ -518,6 +565,14 @@ class _Sequence(XdrObject):
     def _delslice(self, sl):
         self._check_size(len(self) - len(self[sl]))
         super().__delitem__(sl)
+
+    def __imul__(self, number):
+        self._check_size(number * len(self))
+        return super().__imul__(number)
+    
+    def __mul__(self, number):
+        self._check_size(number * len(self))
+        return self.__class__(super().__mul__(number))
 
 
 class _FixedSequence(_Sequence):
@@ -572,19 +627,17 @@ class _Bytes(_Sequence, bytearray):
         self._check_size(len(self) + len(other))
         return self.__class__(super().__add__(other))
     
-    def __imul__(self, number):
-        self._check_size(number * len(self))
-        return super().__imul__(number)
-    
-    def __mul__(self, number):
-        self._check_size(number * len(self))
-        return self.__class__(super().__mul__(number))
-
 
 class FixedBytes(_FixedSequence, _Bytes):
+    def __new__(cls, data=None):
+        if data is None:
+            data = bytes(cls._size)
+        return super().__new__(cls, data)
+            
     def __init__(self, data=None):
         if data is None:
             data = bytes(self._size)
+        self._encoded_size = self._size
         super().__init__(data)
         
     def _encode(self):
@@ -597,10 +650,19 @@ class FixedBytes(_FixedSequence, _Bytes):
         
         
 class _VarBytes(_VarSequence, _Bytes):
+    def __new__(cls, data=None):
+        if data is None:
+            data = b''
+        return super().__new__(cls, data)
+            
     def __init__(self, data=None):
         if data is None:
             data = b''
         super().__init__(data)
+    
+    @property
+    def _encoded_size(self):
+        return _padded_size(Int32._encoded_size) + len(self)
     
     def _encode(self):
         return encode(Int32u(len(self))) + _pad(bytes(self))
@@ -610,12 +672,104 @@ class _VarBytes(_VarSequence, _Bytes):
         size, source = Int32u._parse(source)
         data, source = _split_and_remove_padding(source, size)
         return cls(data), source
+
     
 class VarBytes(_VarBytes):
     pass
 
+
 class String(_VarBytes):
     pass
 
+
+class _Array(_Sequence, list):
+    @classmethod
+    def _prepare(cls, dct):
+        for name, value in dct.items():
+            if name in ('size', 'type'):
+                delattr(cls, name)
+                setattr(cls, '_'+ name, value)
+    
+    @classmethod
+    def _make_class_dictionary(cls, size, type):
+        return {'size': size, 'type': type}
+
+    @_methoddispatch
+    def __setitem__(self, index, value):
+        super().__setitem__(index, self._type(value))
+    
+    @__setitem__.register(slice)
+    def _setslice(self, sl, value):
+        self._check_size(len(self) - len(self[sl]) + len(value))
+        super().__setitem__(sl, (self._type(v) for v in value))
+    
+    def append(self, value):
+        self._check_size(len(self) + 1)
+        super().append(self._type(value))
+    
+    def extend(self, value):
+        self._check_size(len(self) + len(value))
+        super().extend(self._type(v) for v in value)
+    
+    def __iadd__(self, other):
+        self._check_size(len(self) + len(other))
+        return super().__iadd__(self._type(v) for v in other)
+    
+    def __add__(self, other):
+        self._check_size(len(self) + len(other))
+        return self.__class__(super().__add__(self._type(v) for v in other))
+    
+
+class FixedArray(_FixedSequence, _Array):
+    def __new__(cls, data=None):
+        if data is None:
+            data = tuple(cls._type() for _ in range(cls._size))
+        return super().__new__(cls, data)
+
+    def __init__(self, data=None):
+        if data is None:
+            data = tuple(self._type() for _ in range(self._size))
+        else:
+            data = tuple(self._type(x) for x in data)
+        super().__init__(data)
+        
+    def _encoded_size(self):
+        return sum(x._encoded_size for x in self)
+    
+    def _encode(self):
+        return b''.join(encode(x) for x in self)
+    
+    @classmethod
+    def _parse(cls, source):
+        lst = []
+        for _ in range(cls._size):
+            item, source = cls._type._parse(source)
+            lst.append(item)
+        return cls(lst), source
+
+
+class VarArray(_VarSequence, _Array):
+    def __new__(cls, data=[]):
+        return super().__new__(cls, data)
+    
+    def __init__(self, data=[]):
+        data = [self._type(x) for x in data]
+        super().__init__(data)
+    
+    @property
+    def _encoded_size(self):
+        return _padded_size(Int32._encoded_size) + sum(x._encoded_size for x in self)
+    
+    def _encode(self):
+        return encode(Int32u(len(self))) + b''.join(encode(x) for x in self)
+    
+    @classmethod
+    def _parse(cls, source):
+        size, source = Int32u._parse(source)
+        lst = []
+        for _ in range(size):
+            item, source = cls._type._parse(source)
+            lst.append(item)
+        return cls(lst), source
 
         

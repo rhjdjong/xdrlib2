@@ -67,13 +67,22 @@ class TestDerivedEnumeration(unittest.TestCase):
     def test_decoding_invalid_data_fails(self):
         self.assertRaises(ValueError, decode, self.MyEnum, b'\0\0\0\0')
         self.assertRaises(ValueError, decode, self.FileKind, b'\xff\xff\xff\xff')
+    
+    def test_existing_enumerations_cannot_be_extended(self):
+        self.assertRaises(ValueError, self.MyEnum.typedef, 'OtherEnum', GREEN=8)
 
+    def test_existing_enumerations_can_be_aliased(self):
+        alias = self.MyEnum.typedef('alias')
+        self.assertIs(alias.RED, self.MyEnum.RED)
+
+        
 class TestBoolean(unittest.TestCase):
     def test_boolean_values(self):
         self.assertEqual(xdrlib2.FALSE, 0) # @UndefinedVariable
         self.assertEqual(xdrlib2.TRUE, 1) # @UndefinedVariable
         self.assertIsInstance(xdrlib2.FALSE, Boolean) # @UndefinedVariable
         self.assertIsInstance(xdrlib2.TRUE, Enumeration) # @UndefinedVariable
+        self.assertEqual(xdrlib2.FALSE.__class__, Boolean) # @UndefinedVariable
         
             
 if __name__ == "__main__":
