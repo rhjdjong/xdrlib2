@@ -125,6 +125,25 @@ class TestFixedArray(unittest.TestCase):
         with self.assertRaises(ValueError):
             x += [5, 6]
 
+    def test_optional_fixed_array(self):
+        optType = Optional(self.IntArray)
+        yes = optType(range(5))
+        no = optType()
+        self.assertIsInstance(yes, self.IntArray)
+        self.assertEqual(yes, [0, 1, 2, 3, 4])
+        self.assertEqual(no, None)
+        y_b = encode(yes)
+        n_b = encode(no)
+        self.assertEqual(y_b, b'\0\0\0\x01'
+                              b'\0\0\0\0'
+                              b'\0\0\0\x01'
+                              b'\0\0\0\x02'
+                              b'\0\0\0\x03'
+                              b'\0\0\0\x04')
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(decode(optType, y_b), yes)
+        self.assertEqual(decode(optType, n_b), no)
+
 
 class TestVarArray(unittest.TestCase):
     class IntArray(VarArray):
@@ -267,6 +286,25 @@ class TestVarArray(unittest.TestCase):
         with self.assertRaises(ValueError):
             x += [5, 6]
     
+    def test_optional_var_array(self):
+        optType = Optional(self.IntArray)
+        yes = optType(range(5))
+        no = optType()
+        self.assertIsInstance(yes, self.IntArray)
+        self.assertEqual(yes, [0, 1, 2, 3, 4])
+        self.assertEqual(no, None)
+        y_b = encode(yes)
+        n_b = encode(no)
+        self.assertEqual(y_b, b'\0\0\0\x01'
+                              b'\0\0\0\x05' 
+                              b'\0\0\0\0'
+                              b'\0\0\0\x01'
+                              b'\0\0\0\x02'
+                              b'\0\0\0\x03'
+                              b'\0\0\0\x04')
+        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(decode(optType, y_b), yes)
+        self.assertEqual(decode(optType, n_b), no)
     
    
 if __name__ == "__main__":

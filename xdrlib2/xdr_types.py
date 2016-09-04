@@ -34,6 +34,8 @@ __all__ = ['encode',
            'Void',
            'FixedArray',
            'VarArray',
+           'Structure',
+           'Optional',
            ]
 
 # _guard is used by the magic that injects enumeration values in the
@@ -106,7 +108,7 @@ class XdrObject(metaclass=_MetaXdrObject):
         # This method during the intitalization of class creation.
         # Subclasses are expected to override this to execute any
         # customization that is required for the class
-        pass
+        raise NotImplementedError
     
     def _encode(self):
         raise NotImplementedError
@@ -153,7 +155,34 @@ class Void(XdrObject):
     def __eq__(self, other):
         return (other is None or isinstance(other, Void))
     
-       
+class _optvoid(Void):
+    def _encode(self):
+        return encode(FALSE) # @UndefinedVariable
+    
+class _optclass(XdrObject):
+    def __new__(cls, *args, **kwargs):
+        if args in ((), (None,)) and not kwargs:
+            return _optvoid()
+        return super().__new__(cls, *args, **kwargs)
+    
+    def _encode(self):
+        return encode(TRUE) + super()._encode() # @UndefinedVariable
+    
+    @classmethod
+    def _parse(cls, source):
+        present, source = Boolean._parse(source)
+        if present:
+            v, source = super()._parse(source)
+            return cls(v), source
+        else:
+            return _optvoid(), source 
+
+def Optional(orig_cls):
+    if issubclass(orig_cls, _optclass):
+        return orig_cls
+    return _MetaXdrObject('*'+orig_cls.__name__, (_optclass, orig_cls,), {})
+
+            
 class _Atomic(XdrObject):
     @classmethod
     def _prepare(cls, dct):
@@ -772,4 +801,31 @@ class VarArray(_VarSequence, _Array):
             lst.append(item)
         return cls(lst), source
 
-        
+
+class Structure(XdrObject):
+    @classmethod
+    def _prepare(cls, dct):
+        member_types = OrderedDict()
+        for name, value in dct.items():
+            if name in member_types:
+                raise ValueError("Redefinition of enumerated value for name '{}'"
+                                 .format(name))
+            if name in _reserved_words:
+                raise ValueError("Invalid structure member name '{}' (reserved word)"
+                                 .format(name))
+            if _is_valid_name(name):
+                if callable(value): continue
+                if isinstance(value, (classmethod, staticmethod)): continue
+            member_types[name] = value
+        cls._member_types = member_types
+        cls._members = OrderedDict.fromkeys(member_types)
+        for name in member_types:
+            delattr(cls, name)
+    
+    @classmethod
+    def _check_arguments(cls, *args, **kwargs):
+        pass
+
+    @classmethod
+    def _make_class_dictionary(cls, *args, **kwargs):
+        return {}

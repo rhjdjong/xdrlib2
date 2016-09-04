@@ -68,6 +68,27 @@ class TestIntegers(unittest.TestCase):
             self.assertIsInstance(x, Int64u)
             self.assertEqual(x, v)
 
+    def test_optional_integers(self):
+        OptInt = Optional(Int32)
+        absent = OptInt()
+        self.assertIsInstance(absent, Void)
+        self.assertEqual(absent, None)
+        self.assertEqual(encode(absent), b'\0\0\0\0')
+        parsed = decode(OptInt, b'\0\0\0\0')
+        self.assertEqual(parsed, absent)
+        self.assertIsInstance(parsed, Void)
+        self.assertEqual(parsed, None)
+        self.assertEqual(encode(parsed), b'\0\0\0\0')
+        
+        present = OptInt(10)
+        self.assertIsInstance(present, Int32)
+        self.assertEqual(present, 10)
+        self.assertEqual(encode(present), b'\0\0\0\x01' b'\0\0\0\x0a')
+        parsed = decode(OptInt, b'\0\0\0\x01' b'\0\0\0\x0a')
+        self.assertEqual(parsed, present)
+        self.assertIsInstance(parsed, OptInt)
+        self.assertEqual(encode(parsed), b'\0\0\0\x01' b'\0\0\0\x0a')
+        
 
 
 if __name__ == "__main__":

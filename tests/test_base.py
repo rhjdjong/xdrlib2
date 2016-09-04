@@ -30,7 +30,16 @@ class TestVoid(unittest.TestCase):
         # This test is here for documentation purposes only.
         # The XDR specification syntax does not allow an optional void
         pass
- 
+
+class TestOptional(unittest.TestCase):
+    def test_optional_is_idempotent(self):
+        t = Optional(Int32)
+        t_opt = Optional(t)
+        self.assertIs(t, t_opt)
+
+    def test_optional_class_name(self):
+        t = Optional(Int32)
+        self.assertEqual(t.__name__, '*Int32')
           
     
     
