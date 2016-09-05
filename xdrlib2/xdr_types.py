@@ -14,6 +14,7 @@ from functools import singledispatch, update_wrapper
 from collections import OrderedDict, namedtuple
 
 from .xdr_base import block_size, endian, _is_valid_name, _reserved_words, _methoddispatch
+from xdrlib2.xdr_base import _methoddispatch
 
 __all__ = ['encode',
            'decode',
@@ -131,7 +132,8 @@ class XdrObject(metaclass=_MetaXdrObject):
 
     @classmethod
     def typedef(cls, name, *args, **kwargs):
-        if not isinstance(name, str) or name and not _is_valid_name(name):
+#         if not isinstance(name, str) or name and not _is_valid_name(name):
+        if not isinstance(name, str) or not name:
             raise ValueError('Invalid name for derived class: {}'.format(name))
         return cls.__class__(name, (cls,), cls._make_class_dictionary(*args, **kwargs))
     
@@ -616,6 +618,9 @@ class _VarSequence(_Sequence):
             
     
 class _Bytes(_Sequence, bytearray):
+    def __new__(cls, data):
+        return super().__new__(cls, data)
+
     @classmethod
     def _prepare(cls, dct):
         for name, value in dct.items():
@@ -654,10 +659,12 @@ class _Bytes(_Sequence, bytearray):
     
 
 class FixedBytes(_FixedSequence, _Bytes):
-    def __new__(cls, data=None):
-        if data is None:
-            data = bytes(cls._size)
-        return super().__new__(cls, data)
+    def __new__(cls, *args):
+        if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
+            return cls.typedef(cls.__name__+'[{}]'.format(args[0]), size=args[0])
+        if args in ((), (None,)):
+            args = (bytes(cls._size),)
+        return super().__new__(cls, *args)
             
     def __init__(self, data=None):
         if data is None:
@@ -675,11 +682,13 @@ class FixedBytes(_FixedSequence, _Bytes):
         
         
 class _VarBytes(_VarSequence, _Bytes):
-    def __new__(cls, data=None):
-        if data is None:
-            data = b''
-        return super().__new__(cls, data)
-            
+    def __new__(cls, *args):
+        if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
+            return cls.typedef(cls.__name__+'<{}>'.format(args[0]), size=args[0])
+        if args in ((), (None,)):
+            args = ([],)
+        return super().__new__(cls, *args)
+
     def __init__(self, data=None):
         if data is None:
             data = b''
@@ -746,11 +755,16 @@ class _Array(_Sequence, list):
     
 
 class FixedArray(_FixedSequence, _Array):
-    def __new__(cls, data=None):
-        if data is None:
-            data = tuple(cls._type() for _ in range(cls._size))
-        return super().__new__(cls, data)
-
+    def __new__(cls, *args):
+        if not hasattr(cls, '_size') and len(args) == 2:
+            if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
+                return cls.typedef('{}[{}]'.format(args[1].__name__, args[0]), size=args[0], type=args[1])
+            elif issubclass(args[0], XdrObject) and isinstance(args[1], numbers.Integral):
+                return cls.typedef('{}[{}]'.format(args[0].__name__, args[1]), size=args[1], type=args[0])
+        if args in ((), (None,)):
+            args = ([cls._type() for _ in range(cls._size)],)
+        return super().__new__(cls, *args)
+    
     def __init__(self, data=None):
         if data is None:
             data = tuple(self._type() for _ in range(self._size))
@@ -774,8 +788,15 @@ class FixedArray(_FixedSequence, _Array):
 
 
 class VarArray(_VarSequence, _Array):
-    def __new__(cls, data=[]):
-        return super().__new__(cls, data)
+    def __new__(cls, *args):
+        if not hasattr(cls, '_size') and len(args) == 2:
+            if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
+                return cls.typedef('{}<{}>'.format(args[1].__name__, args[0]), size=args[0], type=args[1])
+            elif issubclass(args[0], XdrObject) and isinstance(args[1], numbers.Integral):
+                return cls.typedef('{}<{}>'.format(args[0].__name__, args[1]), size=args[1], type=args[0])
+        if args in ((), (None,)):
+            args = ([],)
+        return super().__new__(cls, *args)
     
     def __init__(self, data=[]):
         data = [self._type(x) for x in data]
@@ -952,6 +973,12 @@ class Union(XdrObject, _UnionTuple):
             if not issubclass(case_type, XdrObject):
                 raise ValueError("Invalid type '{}' in case specification for Union class '{}', branch '{}'"
                                  .format(case_type.__name__, cls.__name__, case_value))
+            if case_value in types:
+                raise ValueError("Redefinition of case value '{}' for Union class '{}'"
+                                 .format(case_value, cls.__name__))
+            if case_name and case_name in names.values():
+                raise ValueError("Duplicate case name '{}' for Union class '{}'"
+                                 .format(case_name, cls.__name__))
             types[case_value] = case_type
             names[case_value] = case_name
         

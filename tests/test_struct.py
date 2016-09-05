@@ -69,9 +69,8 @@ class TestStructure(unittest.TestCase):
     def test_structure_type_construction(self):
         c = Structure.typedef('c',
                               ('n', Int32),
-                              ('s', String.typedef('s', 5)),
-                              ('t', FixedArray.typedef('t', size=5,
-                                                       type=VarBytes.typedef('', 3))))
+                              ('s', String(5)),
+                              ('t', FixedArray(5, VarBytes(3))))
         s = c(n=3, s=b'hallo', t=(b'abc', b'de', b'f', b'', b'ghi'))
         bp = encode(s)
         self.assertEqual(bp, b'\0\0\0\x03'
@@ -106,9 +105,8 @@ class TestStructure(unittest.TestCase):
     def test_optional_struct(self):
         myStruct = Structure.typedef('myStruct',
                                      ('n', Int32),
-                                     ('s', String.typedef('s', 5)),
-                                     ('t', FixedArray.typedef('t', size=5,
-                                                              type=VarBytes.typedef('', 3))))
+                                     ('s', String(5)),
+                                     ('t', FixedArray(5, VarBytes(3))))
   
         optStruct = Optional(myStruct)
         
@@ -133,9 +131,8 @@ class TestStructure(unittest.TestCase):
     def test_struct_with_optional_members(self):
         myStruct = Structure.typedef('myStruct',
                                      ('n', Optional(Int32)),
-                                     ('s', Optional(String.typedef('s', 5))),
-                                     ('t', Optional(FixedArray.typedef('t', size=5,
-                                                                       type=VarBytes.typedef('', 3)))))
+                                     ('s', Optional(String(5))),
+                                     ('t', Optional(FixedArray(5, VarBytes(3)))))
   
        
         a = myStruct(1, b'hallo', (b'a', b'bc', b'def', b'gh', b''))

@@ -144,7 +144,17 @@ class TestFixedArray(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
-
+    def test_simple_subclassing(self):
+        subcls = FixedArray(Int32, 5)
+        self.assertTrue(issubclass(subcls, FixedArray))
+        x = subcls((1, 2, 3, 4, 5))
+        self.assertIsInstance(x, FixedArray)
+        self.assertEqual(encode(x), b'\0\0\0\x01'
+                                    b'\0\0\0\x02'
+                                    b'\0\0\0\x03'
+                                    b'\0\0\0\x04'
+                                    b'\0\0\0\x05')
+             
 class TestVarArray(unittest.TestCase):
     class IntArray(VarArray):
         size = 5
@@ -305,6 +315,16 @@ class TestVarArray(unittest.TestCase):
         self.assertEqual(n_b, b'\0\0\0\0')
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
+
+    def test_simple_subclassing(self):
+        subcls = VarArray(Int32, 5)
+        self.assertTrue(issubclass(subcls, VarArray))
+        x = subcls((1, 2, 3))
+        self.assertIsInstance(x, VarArray)
+        self.assertEqual(encode(x), b'\0\0\0\x03'
+                                    b'\0\0\0\x01'
+                                    b'\0\0\0\x02'
+                                    b'\0\0\0\x03')
     
    
 if __name__ == "__main__":

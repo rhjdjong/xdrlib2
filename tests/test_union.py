@@ -24,6 +24,20 @@ class TestUnion(unittest.TestCase):
     def test_simple_union_invalid_initialization(self):
         self.assertRaises(ValueError, self.SimpleUnion, 18, b'random value')
         self.assertRaises(ValueError, self.SimpleUnionFromEnum, 5, b'some value')
+    
+    def test_invalid_union_definition(self):
+#         with self.assertRaises(ValueError):
+#             x = Union.typedef('RedefinedCaseValue',
+#                               switch=('discr', Int32),
+#                               case={1: ('a', Boolean), 2: ('b', Float32), 1: ('c', Int64)})
+        with self.assertRaises(ValueError):
+            x = Union.typedef('RedefinedCAseName',
+                              switch=('discr', Int32),
+                              case={1: ('a', Boolean), 2: ('a', Float32), 'default': ('c', Int64)})
+        with self.assertRaises(ValueError):
+            x = Union.typedef('CaseNameMatchesSwitchName',
+                              switch=('a', Int32),
+                              case={1: ('a', Boolean), 2: ('b', Float32)})
             
     def test_simple_union_from_enum(self):
         a = self.SimpleUnionFromEnum(1, None)
