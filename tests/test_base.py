@@ -40,6 +40,7 @@ class TestOptional(unittest.TestCase):
     def test_optional_class_name(self):
         t = Optional(Int32)
         self.assertEqual(t.__name__, '*Int32')
+        self.assertTrue(issubclass(t, Int32))
           
     
     

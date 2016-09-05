@@ -105,18 +105,14 @@ class XdrObject(metaclass=_MetaXdrObject):
 
     @classmethod
     def _prepare(cls, dct):
-        # This method during the intitalization of class creation.
-        # Subclasses are expected to override this to execute any
+        # This method is called  during the initialization phase of class creation.
+        # Subclasses are expected to override this method to execute any
         # customization that is required for the class
-        raise NotImplementedError
+        pass
     
     def _encode(self):
         raise NotImplementedError
 
-    @property
-    def _enocded_size(self):
-        raise NotImplementedError
-    
     @classmethod
     def _decode(cls, source):
         obj, source = cls._parse(source)
@@ -129,6 +125,10 @@ class XdrObject(metaclass=_MetaXdrObject):
         raise NotImplementedError
 
     @classmethod
+    def _make_class_dictionary(cls, *args, **kwargs):
+        return {}
+
+    @classmethod
     def typedef(cls, name, *args, **kwargs):
         if not isinstance(name, str) or name and not _is_valid_name(name):
             raise ValueError('Invalid name for derived class: {}'.format(name))
@@ -139,15 +139,19 @@ class Void(XdrObject):
     def __new__(cls, _=None):
         return super().__new__(cls)
     
+    def __init__(self, _=None):
+        self._optional = False
+    
     @classmethod
     def _check_arguments(cls):
         pass
 
     def _encode(self):
-        return b''
+        if self._optional:
+            return encode(FALSE) # @UndefinedVariable
+        else:
+            return b''
 
-    _encoded_size = 0
-        
     @classmethod
     def _parse(cls, source):
         return cls(None), source
@@ -155,14 +159,13 @@ class Void(XdrObject):
     def __eq__(self, other):
         return (other is None or isinstance(other, Void))
     
-class _optvoid(Void):
-    def _encode(self):
-        return encode(FALSE) # @UndefinedVariable
-    
-class _optclass(XdrObject):
+
+class _opt_cls(XdrObject): 
     def __new__(cls, *args, **kwargs):
         if args in ((), (None,)) and not kwargs:
-            return _optvoid()
+            v = Void()
+            v._optional = True
+            return v
         return super().__new__(cls, *args, **kwargs)
     
     def _encode(self):
@@ -172,15 +175,26 @@ class _optclass(XdrObject):
     def _parse(cls, source):
         present, source = Boolean._parse(source)
         if present:
-            v, source = super()._parse(source)
-            return cls(v), source
+            obj, source = super()._parse(source)
+            obj.__class__ = cls
         else:
-            return _optvoid(), source 
+            obj = Void()
+            obj._optional = True
+        return obj, source
+
 
 def Optional(orig_cls):
-    if issubclass(orig_cls, _optclass):
+    if issubclass(orig_cls, _opt_cls):
         return orig_cls
-    return _MetaXdrObject('*'+orig_cls.__name__, (_optclass, orig_cls,), {})
+    
+    if issubclass(orig_cls, Void):
+        raise ValueError('Void class cannot be made optional')
+    
+    class new_cls(_opt_cls, orig_cls):
+        pass
+    new_cls.__name__ = '*'+orig_cls.__name__
+    return new_cls
+        
 
             
 class _Atomic(XdrObject):
@@ -203,15 +217,9 @@ class _Atomic(XdrObject):
 
     @classmethod
     def _parse(cls, source):
-        data, source = _split_and_remove_padding(source, cls._encoded_size)
-        tup, data = _unpack(cls._fmt, cls._encoded_size, data)
-        if data:
-            raise ValueError('Too much data')
+        tup, source = _unpack(cls._fmt, cls._encoded_size, source)
         return cls(tup[0]), source
 
-    @classmethod
-    def _make_class_dictionary(cls, *args, **kwargs):
-        return {}
 
 
 class _Integer(_Atomic, int):
@@ -221,24 +229,11 @@ class _Integer(_Atomic, int):
             return v
         raise ValueError('Value out of range for class {}: {}'.format(cls.__name__, v))
 
-#     @classmethod
-#     def _check_arguments(cls, value):
-#         pass
-#         if not isinstance(int(value), numbers.Integral):
-#             raise ValueError("Invalid argument type '{}' for class '{}'"
-#                              .format(type(value), cls.__name__))
-        
 
 class _Float(_Atomic, float):
     def __new__(cls, value=0.0):
         return super().__new__(cls, value)
     
-#     @classmethod
-#     def _check_arguments(cls, value):
-#         if not isinstance(float(value), numbers.Real):
-#             raise ValueError("Invalid argument type '{}' for class '{}'"
-#                              .format(type(value), cls.__name__))
-
     
 class Int32(_Integer):
     '''Representation of an XDR signed integer.
@@ -803,8 +798,36 @@ class VarArray(_VarSequence, _Array):
 
 
 class Structure(XdrObject):
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls)
+    
+    def __init__(self, *args, **kwargs):
+        self._members = OrderedDict.fromkeys(self._types)
+            
+        if len(args) + len(kwargs) > len(self._members) :
+            raise ValueError("Too many values for class '{}'".format(self.__class__.__name__))
+        for name in kwargs:
+            if name in tuple(self._members.keys())[:len(args)]:
+                raise ValueError("Multiple values specified for member '{}' in class '{}' "
+                                 .format(name, self.__class__.__name__))
+            if name not in tuple(self._members.keys())[len(args):]:
+                raise ValueError("Invalid member name '{}'  for class '{}'"
+                                 .format(name, self.__class__.__name__))
+        for (name, typ), value in zip(self._types.items(), args):
+            self._members[name] = value if value.__class__ is typ else typ(value)
+        for (name, value) in kwargs.items():
+            typ = self._types[name]
+            self._members[name] = value if value.__class__ is typ else typ(value)
+
+    @classmethod
+    def _check_arguments(cls, *args, **kwargs):
+        pass
+        
     @classmethod
     def _prepare(cls, dct):
+        if not hasattr(cls, '_types'):
+            cls._types = OrderedDict()
+
         member_types = OrderedDict()
         for name, value in dct.items():
             if name in member_types:
@@ -814,18 +837,62 @@ class Structure(XdrObject):
                 raise ValueError("Invalid structure member name '{}' (reserved word)"
                                  .format(name))
             if _is_valid_name(name):
-                if callable(value): continue
-                if isinstance(value, (classmethod, staticmethod)): continue
-            member_types[name] = value
-        cls._member_types = member_types
-        cls._members = OrderedDict.fromkeys(member_types)
+                if issubclass(value, XdrObject):
+                    member_types[name] = value
+        
+        if not member_types:
+            # No member elements defined. This is either the base 'Structure' class
+            # or the definition of an (optioanal) alias for an existing Structure class
+            return
+        
+        if cls._types:
+            raise ValueError("Cannot add new structure members to Structure subclass '{}'")
+        
+        cls._types = member_types
         for name in member_types:
             delattr(cls, name)
-    
+     
     @classmethod
-    def _check_arguments(cls, *args, **kwargs):
-        pass
+    def _make_class_dictionary(cls, *args):
+        return OrderedDict(args)
+
+    def _encode(self):
+        return b''.join(encode(v) for v in self._members.values())
 
     @classmethod
-    def _make_class_dictionary(cls, *args, **kwargs):
-        return {}
+    def _parse(cls, source):
+        dct = {}
+        for name, typ in cls._types.items():
+            obj, source = typ._parse(source)
+            dct[name] = obj
+        return cls(**dct), source
+
+    def __getattr__(self, name):
+        try:
+            return self._members[name]
+        except KeyError:
+            raise AttributeError("'{}' struct object has no member '{}'"
+                                 .format(self.__class__.__name__, name))
+    
+    def __setattr__(self, name, value):
+        if _is_valid_name(name):
+            try:
+                typ = self._types[name]
+            except KeyError:
+                raise AttributeError("'{}' struct object has no member '{}'"
+                                     .format(self.__class__.__name__, name))
+            self._members[name] = value if value.__class__ is typ else typ(value)
+        else:
+            super().__setattr__(name, value)
+    
+    def __eq__(self, other):
+        if isinstance(other, (tuple, dict)):
+            try:
+                other = self.__class__(other)
+            except ValueError:
+                return False
+        if type(other) != self.__class__:
+            return False
+        return all(x == y for x, y in zip(self._members.values(), other._members.values()))
+        
+        
