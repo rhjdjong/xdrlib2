@@ -897,8 +897,8 @@ class Structure(XdrObject):
         return all(x == y for x, y in zip(self._members.values(), other._members.values()))
         
 
-_UnionTuple = namedtuple('_UnionTuple', 'switch case')
-
+_UnionTuple = namedtuple('_UnionTuple', 'switch case')    
+    
 class Union(XdrObject, _UnionTuple):
     def __new__(cls, variant, *args, **kwargs):
         switch = cls._types['switch'](variant)
@@ -910,7 +910,6 @@ class Union(XdrObject, _UnionTuple):
     def _prepare(cls, dct):
         if not hasattr(cls, '_types'):
             cls._types = {}
-            cls._names = {}
 
         data = {}
         for name in ('switch', 'case'):
@@ -953,15 +952,16 @@ class Union(XdrObject, _UnionTuple):
             if not issubclass(case_type, XdrObject):
                 raise ValueError("Invalid type '{}' in case specification for Union class '{}', branch '{}'"
                                  .format(case_type.__name__, cls.__name__, case_value))
-            
             types[case_value] = case_type
             names[case_value] = case_name
         
         cls._types = types
         cls._names = names
+        cls._values = {name: value for value, name in names.items() if name}
         
         for name in ('switch', 'case'):
             delattr(cls, name)
+            
             
     @classmethod       
     def _case_type(cls, switch):
@@ -990,3 +990,21 @@ class Union(XdrObject, _UnionTuple):
         case_type = cls._case_type(switch)
         case, source = case_type._parse(source)
         return cls(switch, case), source
+
+    def __getattr__(self, name):
+        if self._names['switch'] == name:
+            return self.switch
+        try:
+            case_name = self._names[self.switch]
+        except KeyError:
+            try:
+                case_name = self._names['default']
+            except KeyError:
+                raise RuntimeError("Invalid switch value '{}' for '{}' instance"
+                                   .format(self.switch, self.__class__.__name__))
+        if case_name == name:
+            return self.case
+        raise AttributeError("Invalid name '{}' for '{}' object with switch value '{}'"
+                             .format(name, self.__class__.__name__, self.switch))
+            
+            

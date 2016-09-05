@@ -140,6 +140,24 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(decode(optType, b_y4), y_4)
         self.assertEqual(decode(optType, b_y5), y_5)
         self.assertEqual(decode(optType, b_no), no)
+    
+    def test_union_values_can_be_accessed_by_name(self):
+        a = self.SimpleUnionFromEnum(1, None)
+        b = self.SimpleUnionFromEnum(2, 12345)
+        c = self.SimpleUnionFromEnum(3, True)
+        
+        self.assertEqual(a.discr, 1)
+        self.assertEqual(b.number, 12345)
+        self.assertEqual(c.logic, True)
+        
+        with self.assertRaises(AttributeError):
+            a.invalid_name
+        
+        with self.assertRaises(AttributeError):
+            b.logic
+    
+        
+        
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
