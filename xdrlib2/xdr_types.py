@@ -35,6 +35,7 @@ __all__ = ['encode',
            'FixedArray',
            'VarArray',
            'Structure',
+           'Union',
            'Optional',
            ]
 
@@ -895,4 +896,97 @@ class Structure(XdrObject):
             return False
         return all(x == y for x, y in zip(self._members.values(), other._members.values()))
         
+
+_UnionTuple = namedtuple('_UnionTuple', 'switch case')
+
+class Union(XdrObject, _UnionTuple):
+    def __new__(cls, variant, *args, **kwargs):
+        switch = cls._types['switch'](variant)
+        case_type = cls._case_type(switch)
+        value = case_type(*args, **kwargs)
+        return super().__new__(cls, switch, value)
+    
+    @classmethod
+    def _prepare(cls, dct):
+        if not hasattr(cls, '_types'):
+            cls._types = {}
+            cls._names = {}
+
+        data = {}
+        for name in ('switch', 'case'):
+            if name in dct:
+                data[name] = dct[name]
+                        
+        if not data:
+            # No union data defined. This is either the base 'Union' class
+            # or the definition of an (optional) alias for an existing Union class
+            return
         
+        if cls._types:
+            raise ValueError("Cannot add new union variants to existing Union subclass '{}'"
+                             .format(cls.__name__))
+        
+        if not ('switch' in data and 'case' in data and data['case']):
+            raise ValueError("Missing 'switch' or 'case' specification for Union class '{}'"
+                             .format(cls.__name__))
+        
+        types = {}
+        names = {}
+        discr_name, discr_type = data['switch']
+        if not issubclass(discr_type, (Int32, Int32u, Enumeration)):
+            raise ValueError("Invalid discriminator type '{}' for Union class '{}'"
+                             .format(discr_type.__name__, cls.__name__))
+        types['switch'] = discr_type
+        names['switch'] = discr_name
+        
+        for case_value, case_spec in data['case'].items():
+            if case_value != 'default':
+                case_value = discr_type(case_value)
+            if case_spec is None:
+                case_type = Void
+                case_name = None
+            elif isinstance(case_spec, collections.abc.Sequence) and len(case_spec) == 2:
+                case_name, case_type = case_spec
+            else:
+                case_name, case_type = case_spec.__name__, case_spec
+                
+            if not issubclass(case_type, XdrObject):
+                raise ValueError("Invalid type '{}' in case specification for Union class '{}', branch '{}'"
+                                 .format(case_type.__name__, cls.__name__, case_value))
+            
+            types[case_value] = case_type
+            names[case_value] = case_name
+        
+        cls._types = types
+        cls._names = names
+        
+        for name in ('switch', 'case'):
+            delattr(cls, name)
+            
+    @classmethod       
+    def _case_type(cls, switch):
+        c_type = cls._types.get(switch)
+        if c_type is None:
+            c_type = cls._types.get('default')
+            if c_type is None:
+                raise ValueError("Invalid switch value '{}' for Union class '{}'"
+                                 .format(switch, cls.__name__))
+        return c_type
+        
+    @classmethod
+    def _check_arguments(cls, *args, **kwargs):
+        pass
+    
+    @classmethod
+    def _make_class_dictionary(cls, **kwargs):
+        return kwargs
+
+    def _encode(self):
+        return encode(self.switch) + encode(self.case)
+    
+    @classmethod
+    def _parse(cls, source):
+        switch, source = cls._types['switch']._parse(source)
+        case_type = cls._case_type(switch)
+        case, source = case_type._parse(source)
+        return cls(switch, case), source
