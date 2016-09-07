@@ -1,0 +1,140 @@
+@@grammar :: xdr
+@@namechars :: "_"
+@@comments :: ?/\/\*((?:.|\n)*?)\*\//?
+@@parseinfo :: True
+
+@@keyword :: bool case const default double quadruple enum float hyper int
+@@keyword :: opaque string struct switch typedef union void
+
+start
+	= specification $
+	;
+
+specification
+	= { definition }*
+	;
+
+definition
+	= type_def
+	| constant_def
+	;
+
+type_def
+	= "typedef" @:typedef ";"
+	| "enum" @:enumdef ";"
+	| "struct" @:structdef ";"
+	| "union" @:uniondef ";"
+	;
+
+typedef::Typedef
+	= def:declaration
+	;
+
+enumdef::Enumdef
+	= name:identifier def:enum_body
+	;
+
+structdef::Structdef
+	= name:identifier def:struct_body
+	;
+
+uniondef::Uniondef
+	= name:identifier def:union_body
+	;
+
+constant_def::Constant
+	= "const" name:identifier "=" def:constant ";"
+	;
+	
+declaration::Declaration
+	= type:type_specifier name:identifier [ "[" var:`false` size:value "]" | "<" var:`true` [size:value] ">" ]
+	| type:"opaque" name:identifier ( "[" var:`false` size:value "]" | "<" var:`true` [size:value] ">" )
+	| type:"string" name:identifier "<" var:`true` [size:value] ">"
+	| optional:`true` type:type_specifier "*" name:identifier
+	| type:"void"
+	;
+	
+value
+	= constant
+	| identifier
+	;
+
+constant
+	= decimal_constant
+	| hexadecimal_constant
+	| octal_constant
+	;
+
+type_specifier
+	= @:`unsigned_int` "unsigned" "int"
+	| @:`unsigned_hyper` "unsigned" "hyper"
+	| "int"
+	| "hyper"
+	| "float"
+	| "double"
+	| "quadruple"
+	| "bool"
+	| enum_type_spec
+	| struct_type_spec
+	| union_type_spec
+	| identifier
+	;
+
+enum_type_spec
+	= "enum" @:enum_body
+	;
+
+enum_body::EnumBody
+	= "{" @:( ",".{ enum_item }+ )"}"
+	;
+
+enum_item
+	= name:identifier "=" value:value
+	;
+	
+struct_type_spec
+	= "struct" @:struct_body
+	;
+
+struct_body::StructBody
+	= "{" { @+:declaration ";" }+ "}"
+	;
+
+union_type_spec
+	= "union" @:union_body
+	;
+
+union_body::UnionBody
+	= "switch" "(" switch:declaration ")" variants:union_variants
+	;
+
+union_variants
+	= "{"
+			cases: {case_spec}+
+			[ "default" ":" default:declaration ";"]
+	  "}"
+	;
+
+case_spec
+	= {"case" case+:value ":"}+ def:declaration ";"
+	;
+
+
+decimal_constant::int
+	= /-?[1-9][0-9]*/
+	;
+	
+hexadecimal_constant::int, 16
+	= /0x[0-9a-fA-F]+/
+	;
+	
+octal_constant::int, 8
+	= /0[0-7]*/
+	;
+	
+@name
+identifier::Name
+	= /[A-Za-z][A-Za-z0-9_]*/
+	;
+
+	

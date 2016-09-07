@@ -1,0 +1,161 @@
+/*
+ * Contrived XDR specification to test various complex structures and border cases
+ */
+
+const TEN = 10;
+const const_value = 0;
+const NEGA = -1;
+const HEX = 0xabcd;
+const OCT = 0123;
+
+typedef unsigned int unsiged_int_simple;
+typedef unsigned int unsigned_int_fixed_array[5];
+typedef unsigned int unsigned_int_var_array<7>;
+typedef unsigned int unsigned_int_var_array_max<>;
+
+typedef int int_simple;
+typedef int int_fixed_array[5];
+typedef int int_var_array<7>;
+typedef int int_var_array_max<>;
+
+typedef unsigned hyper unsigned_hyper_simple;
+typedef unsigned hyper unsigned_hyper_fixed_array[5];
+typedef unsigned hyper unsigned_hyper_var_array<7>;
+typedef unsigned hyper unsigned_hyper_var_array_max<>;
+
+typedef hyper hyper_simple;
+typedef hyper hyper_fixed_array[5];
+typedef hyper hyper_var_array<7>;
+typedef hyper hyper_var_array_max<>;
+
+typedef float float_simple;
+typedef float float_fixed_array[5];
+typedef float float_var_array<7>;
+typedef float float_var_array_max<>;
+
+typedef double double_simple_;
+typedef double double_fixed_array[5];
+typedef double double_var_array<7>;
+typedef double double_var_array_max<>;
+
+typedef quadruple quadruple_simple_;
+typedef quadruple quadruple_fixed_array[5];
+typedef quadruple quadruple_var_array<7>;
+typedef quadruple quadruple_var_array_max<>;
+
+typedef bool bool_simple;
+typedef bool bool_fixed_array[5];
+typedef bool bool_var_array<7>;
+typedef bool bool_var_array_max<>;
+
+typedef int_var_array_max * opt_int_list;
+
+enum enum_with_single_value {
+	X=3
+} ;
+
+enum enum_with_multiple_values {
+	Y=4,
+	Z=TEN
+} ;
+
+struct struct_with_single_simple_element {
+	int a;
+};
+
+struct struct_with_multiple_simple_elements {
+	hyper b;
+	float c;
+};
+
+struct struct_with_unusual_but_legal_void_element {
+	fixed_array_of_bool a;
+	var_array_of_float b;
+	void;
+};
+
+union union_with_single_simple_variant_without_default switch (int a) {
+	case 1:
+		float f;
+};
+
+union union_with_multiple_variants_without_default switch (unsigned int a) {
+	case 1:
+		fixed_array_of_float f;
+	case TEN:
+		double d;
+};
+
+union union_definition_of_optional_structure switch (bool c) {
+	case TRUE:
+		struct_with_multiple_elements s;
+	default:
+		void;
+};
+
+union union_with_multiple_cases_with_same_variant switch (int a) {
+	case 1:
+	case 2:
+		float f;
+	case 3:
+	case 4:
+		double d;
+	case 5:
+		bool b;
+	case 6:
+		void;
+	default:
+		unsigned int i;
+};
+
+struct very_complex_struct {
+	union switch (int a) {
+		case 1:
+			struct {
+				int x[5];
+				float y<>;
+			} struct_var;
+		case 2:
+		case 3:
+			union switch (bool b) {
+				case FALSE:
+					struct_with_multiple_elements b_false;
+				case TRUE:
+					union_with_multiple_variants_without_default b_true[5];
+			} union_var;
+		case 4:
+			enum {H=8, K=10} enum_var;
+		case 5:
+			case_type x;
+		default:
+			void;
+	} first_element;
+	struct {
+		bool x;
+		string s<>;
+	} second_element[TEN];
+	enum {
+		E = 5,
+		F = 6,
+		G = 7
+	} third_element;		
+};
+
+typedef struct {
+	int a;
+	float b;
+} struct_via_typedef;
+
+typedef enum {
+	A = 1,
+	B = 2
+} enum_via_typedef;
+
+typedef union switch (bool b) {
+	case FALSE:
+		int x;
+	case TRUE:
+		unsigned int y;
+} union_via_typedef;
+
+typedef void;

@@ -626,7 +626,7 @@ class _Bytes(_Sequence, bytearray):
         for name, value in dct.items():
             if name in ('size'):
                 delattr(cls, name)
-                setattr(cls, '_'+ name, value)
+                setattr(cls, '_'+ name, Int32u(value))
 
     @classmethod
     def _make_class_dictionary(cls, size):
@@ -696,7 +696,7 @@ class _VarBytes(_VarSequence, _Bytes):
     
     @property
     def _encoded_size(self):
-        return _padded_size(Int32._encoded_size) + len(self)
+        return _padded_size(Int32u._encoded_size) + len(self)
     
     def _encode(self):
         return encode(Int32u(len(self))) + _pad(bytes(self))
@@ -721,6 +721,8 @@ class _Array(_Sequence, list):
     def _prepare(cls, dct):
         for name, value in dct.items():
             if name in ('size', 'type'):
+                if name == 'size':
+                    value = Int32u(value)
                 delattr(cls, name)
                 setattr(cls, '_'+ name, value)
     
@@ -804,7 +806,7 @@ class VarArray(_VarSequence, _Array):
     
     @property
     def _encoded_size(self):
-        return _padded_size(Int32._encoded_size) + sum(x._encoded_size for x in self)
+        return _padded_size(Int32u._encoded_size) + sum(x._encoded_size for x in self)
     
     def _encode(self):
         return encode(Int32u(len(self))) + b''.join(encode(x) for x in self)
