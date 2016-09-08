@@ -26,24 +26,24 @@ type_def
 	| "union" @:uniondef ";"
 	;
 
-typedef::Typedef
-	= def:declaration
+typedef
+	= declaration
 	;
 
-enumdef::Enumdef
-	= name:identifier def:enum_body
+enumdef
+	= identifier enum_body
 	;
 
-structdef::Structdef
-	= name:identifier def:struct_body
+structdef
+	= identifier struct_body
 	;
 
-uniondef::Uniondef
-	= name:identifier def:union_body
+uniondef
+	= identifier union_body
 	;
 
-constant_def::Constant
-	= "const" name:identifier "=" def:constant ";"
+constant_def
+	= "const" @:identifier "=" @:constant ";"
 	;
 	
 declaration::Declaration
@@ -84,19 +84,19 @@ enum_type_spec
 	= "enum" @:enum_body
 	;
 
-enum_body::EnumBody
-	= "{" @:( ",".{ enum_item }+ )"}"
+enum_body
+	= "{" ( ",".{ @+:enum_item }+ )"}"
 	;
 
 enum_item
-	= name:identifier "=" value:value
+	= @:identifier "=" @:value
 	;
 	
 struct_type_spec
 	= "struct" @:struct_body
 	;
 
-struct_body::StructBody
+struct_body
 	= "{" { @+:declaration ";" }+ "}"
 	;
 
@@ -104,31 +104,27 @@ union_type_spec
 	= "union" @:union_body
 	;
 
-union_body::UnionBody
-	= "switch" "(" switch:declaration ")" variants:union_variants
-	;
-
-union_variants
-	= "{"
-			cases: {case_spec}+
-			[ "default" ":" default:declaration ";"]
+union_body
+	= "switch" "(" switch:declaration ")" "{"
+		variants:{case_spec}+
+		["default" ":" default:declaration ";" ]
 	  "}"
 	;
 
 case_spec
-	= {"case" case+:value ":"}+ def:declaration ";"
+	= {"case" case+:value ":"}+ variant:declaration ";"
 	;
 
 
-decimal_constant::int
+decimal_constant
 	= /-?[1-9][0-9]*/
 	;
 	
-hexadecimal_constant::int, 16
+hexadecimal_constant
 	= /0x[0-9a-fA-F]+/
 	;
 	
-octal_constant::int, 8
+octal_constant
 	= /0[0-7]*/
 	;
 	
