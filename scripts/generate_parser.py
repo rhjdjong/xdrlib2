@@ -5,11 +5,8 @@ Created on 12 sep. 2016
 '''
 
 from xdrlib2.xdr_base import config_file, config
-import logging
 import grako
 from fs.opener import fsopendir
-
-logging.basicConfig(filename='test_use.log', level=logging.DEBUG)
 
 grammar = config['files']['grammar']
 parser = config['files']['parser']
@@ -28,6 +25,8 @@ def main():
             with fs.open(parser_path, 'w') as p_f:
                 p_f.write(grako.gencode(grammar=g_f.read()))
         print("Parser generation completed succesfully")
+    else:
+        print("Parser is up to date")
 
 if __name__ == '__main__':
     main()
