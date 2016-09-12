@@ -4,30 +4,25 @@ Created on 8 sep. 2016
 @author: Ruud
 '''
 
-import os
 import logging
-import configparser
 
 import grako
 from fs.opener import fsopendir
+
+from .xdr_base import config_file, config
+from .parser import xdrParser
 
 __all__ = [ 'use',
 
            ]
 
-ini_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'etc', 'xdr.ini'))
-
-cp = configparser.ConfigParser()
-with open(ini_file) as f:
-    cp.read_file(f)
-    
-grammar = cp['files']['grammar']
-parser = cp['files']['parser']
+grammar = config['files']['grammar']
+parser = config['files']['parser']
     
 grammar_path = '/grammar/' + grammar
 parser_path = '/parser/' + parser
 
-fs = fsopendir('mount://' + ini_file)
+fs = fsopendir('mount://' + config_file)
 
 def use(name, fs=fs):
     # Regenerate parser if it does not exist, or if the grammar is newer
@@ -45,4 +40,5 @@ def use(name, fs=fs):
             raise
         else:
             logging.info("Parser generation completed succesfully")
-         
+    
+    

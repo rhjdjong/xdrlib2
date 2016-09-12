@@ -6,6 +6,7 @@ Created on 2 sep. 2016
 import unittest
 
 from xdrlib2 import *
+from xdrlib2.xdr_types import _padding
 
 class TestFixedArray(unittest.TestCase):
     class IntArray(FixedArray):
@@ -40,14 +41,12 @@ class TestFixedArray(unittest.TestCase):
         i_bytes = encode(i_arr)
         s_bytes = encode(s_arr)
         
-        self.assertEqual(i_bytes, b'\0\0\0\x01'
-                                  b'\0\0\0\x02'
-                                  b'\0\0\0\x03'
-                                  b'\0\0\0\x04'
-                                  b'\0\0\0\x05')
-        self.assertEqual(s_bytes, b'\0\0\0\x01' b'a\0\0\0'
-                                  b'\0\0\0\x02' b'bc\0\0'
-                                  b'\0\0\0\x03' b'def\0')
+        self.assertEqual(i_bytes, b''.join(encode(Int32(i)) for i in int_list))
+        self.assertEqual(s_bytes, b''.join(b''.join((encode(Int32u(len(s))),
+                                                     s,
+                                                     _padding(len(s))))
+                                           for s in str_list)
+                         )
         
         i_decoded = decode(self.IntArray, i_bytes)
         s_decoded = decode(self.StringArray, s_bytes)
@@ -59,15 +58,15 @@ class TestFixedArray(unittest.TestCase):
         self.assertRaises(ValueError, self.StringArray, (b'a', b'bc', b'def', b'ghij', b'klmno'))
     
     def test_fixed_array_decode_errors(self):
-        self.assertRaises(ValueError, decode, self.IntArray, b'\0\0\0\x01'
-                                                             b'\0\0\0\x02'
-                                                             b'\0\0\0\x03'
-                                                             b'\0\0\0\x04')
-        self.assertRaises(ValueError, decode, self.StringArray, b'\0\0\0\x01' b'a\0\0\0'
-                                                                b'\0\0\0\x02' b'bc\0\0'
-                                                                b'\0\0\0\x03' b'def\0'
-                                                                b'\0\0\0\x04' b'ghij'
-                                                                b'\0\0\0\x05' b'klmno\0\0\0')
+        int_list = [1, 2, 3, 4]
+        str_list = [b'a', b'bc', b'def', b'ghij', b'klmno']
+        self.assertRaises(ValueError, decode, self.IntArray,
+                          b''.join(encode(Int32(i)) for i in int_list))
+        self.assertRaises(ValueError, decode, self.StringArray,
+                          b''.join(b''.join((encode(Int32u(len(s))),
+                                             s,
+                                             _padding(len(s))))
+                                   for s in str_list))
     
     def test_fixed_array_requires_correct_type(self):
         self.assertRaises(ValueError, self.IntArray, (b'a', b'bc', b'def', b'ghij', b'klmno'))
@@ -83,11 +82,7 @@ class TestFixedArray(unittest.TestCase):
         self.assertIsInstance(x, my_cls)
         self.assertTrue(all(isinstance(a, x._type) for a in x))
         x_bytes = encode(x)
-        self.assertEqual(x_bytes, b'\0\0\0\0'
-                                  b'\0\0\0\x01'
-                                  b'\0\0\0\x01'
-                                  b'\0\0\0\0'
-                                  b'\0\0\0\x01')
+        self.assertEqual(x_bytes, b''.join(encode(Boolean(b)) for b in arg_list))
         self.assertEqual(decode(my_cls, x_bytes), x)
 
     def test_fixed_array_with_size_0(self):
@@ -134,13 +129,8 @@ class TestFixedArray(unittest.TestCase):
         self.assertEqual(no, None)
         y_b = encode(yes)
         n_b = encode(no)
-        self.assertEqual(y_b, b'\0\0\0\x01'
-                              b'\0\0\0\0'
-                              b'\0\0\0\x01'
-                              b'\0\0\0\x02'
-                              b'\0\0\0\x03'
-                              b'\0\0\0\x04')
-        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(y_b, encode(TRUE) + b''.join(encode(Int32(x)) for x in range(5))) # @UndefinedVariable
+        self.assertEqual(n_b, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
@@ -149,11 +139,7 @@ class TestFixedArray(unittest.TestCase):
         self.assertTrue(issubclass(subcls, FixedArray))
         x = subcls((1, 2, 3, 4, 5))
         self.assertIsInstance(x, FixedArray)
-        self.assertEqual(encode(x), b'\0\0\0\x01'
-                                    b'\0\0\0\x02'
-                                    b'\0\0\0\x03'
-                                    b'\0\0\0\x04'
-                                    b'\0\0\0\x05')
+        self.assertEqual(encode(x), b''.join(encode(Int32(x)) for x in (1, 2, 3, 4, 5)))
              
 class TestVarArray(unittest.TestCase):
     class IntArray(VarArray):
@@ -185,13 +171,11 @@ class TestVarArray(unittest.TestCase):
         i_bytes = encode(i_arr)
         s_bytes = encode(s_arr)
         
-        self.assertEqual(i_bytes, b'\0\0\0\x03'
-                                  b'\0\0\0\x01'
-                                  b'\0\0\0\x02'
-                                  b'\0\0\0\x03')
-        self.assertEqual(s_bytes, b'\0\0\0\x02'
-                                  b'\0\0\0\x01' b'a\0\0\0'
-                                  b'\0\0\0\x02' b'bc\0\0')
+        self.assertEqual(i_bytes, encode(Int32u(len(int_list))) + b''.join(encode(Int32(i)) for i in int_list))
+        self.assertEqual(s_bytes, encode(Int32u(len(str_list))) + b''.join(b''.join((encode(Int32u(len(s))),
+                                                                                     s,
+                                                                                     _padding(len(s))))
+                                                                           for s in str_list))
         
         i_decoded = decode(self.IntArray, i_bytes)
         s_decoded = decode(self.StringArray, s_bytes)
@@ -203,19 +187,14 @@ class TestVarArray(unittest.TestCase):
         self.assertRaises(ValueError, self.StringArray, (b'a', b'bc', b'def', b'ghij', b'klmno'))
     
     def test_var_array_decode_errors(self):
-        self.assertRaises(ValueError, decode, self.IntArray, b'\0\0\0\x06'
-                                                             b'\0\0\0\x01'
-                                                             b'\0\0\0\x02'
-                                                             b'\0\0\0\x03'
-                                                             b'\0\0\0\x04'
-                                                             b'\0\0\0\x05'
-                                                             b'\0\0\0\x06')
-        self.assertRaises(ValueError, decode, self.StringArray, b'\0\0\0\x05'
-                                                                b'\0\0\0\x01' b'a\0\0\0'
-                                                                b'\0\0\0\x02' b'bc\0\0'
-                                                                b'\0\0\0\x03' b'def\0'
-                                                                b'\0\0\0\x04' b'ghij'
-                                                                b'\0\0\0\x05' b'klmno\0\0\0')
+        self.assertRaises(ValueError, decode, self.IntArray,
+                          encode(Int32u(6)) + b''.join(encode(Int32(i)) for i in range(1, 6)))
+        self.assertRaises(ValueError, decode, self.StringArray,
+                          encode(Int32u(5)) + b''.join(b''.join((encode(Int32u(len(s))),
+                                                                 s,
+                                                                 _padding(len(s))))
+                                                       for s in [b'a', b'bc', b'def', b'ghij', b'klmno']))
+
     
     def test_var_array_requires_correct_type(self):
         self.assertRaises(ValueError, self.IntArray, (b'a', b'bc', b'def', b'ghij', b'klmno'))
@@ -231,9 +210,7 @@ class TestVarArray(unittest.TestCase):
         self.assertIsInstance(x, my_cls)
         self.assertTrue(all(isinstance(a, x._type) for a in x))
         x_bytes = encode(x)
-        self.assertEqual(x_bytes, b'\0\0\0\x02'
-                                  b'\0\0\0\x00'
-                                  b'\0\0\0\x01')
+        self.assertEqual(x_bytes, encode(Int32u(len(arg_list))) + b''.join((encode(Boolean(x)) for x in arg_list)))
         self.assertEqual(decode(my_cls, x_bytes), x)
 
     def test_var_array_with_size_0(self):
@@ -242,7 +219,7 @@ class TestVarArray(unittest.TestCase):
         self.assertIsInstance(x, my_cls)
         self.assertSequenceEqual(x, [])
         x_bytes = encode(x)
-        self.assertEqual(x_bytes, b'\0\0\0\0')
+        self.assertEqual(x_bytes, encode(Int32u(0)))
         self.assertEqual(decode(my_cls, x_bytes), x)
 
     def test_var_array_item_replacement(self):
@@ -305,14 +282,10 @@ class TestVarArray(unittest.TestCase):
         self.assertEqual(no, None)
         y_b = encode(yes)
         n_b = encode(no)
-        self.assertEqual(y_b, b'\0\0\0\x01'
-                              b'\0\0\0\x05' 
-                              b'\0\0\0\0'
-                              b'\0\0\0\x01'
-                              b'\0\0\0\x02'
-                              b'\0\0\0\x03'
-                              b'\0\0\0\x04')
-        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(y_b, encode(TRUE) + # @UndefinedVariable
+                              encode(Int32u(5)) +
+                              b''.join(encode(Int32(x)) for x in range(5)))
+        self.assertEqual(n_b, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
@@ -321,10 +294,8 @@ class TestVarArray(unittest.TestCase):
         self.assertTrue(issubclass(subcls, VarArray))
         x = subcls((1, 2, 3))
         self.assertIsInstance(x, VarArray)
-        self.assertEqual(encode(x), b'\0\0\0\x03'
-                                    b'\0\0\0\x01'
-                                    b'\0\0\0\x02'
-                                    b'\0\0\0\x03')
+        self.assertEqual(encode(x), encode(Int32u(3)) +
+                                    b''.join(encode(Int32(x)) for x in (1, 2, 3)))
     
    
 if __name__ == "__main__":

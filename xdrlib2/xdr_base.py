@@ -3,15 +3,36 @@ Created on 29 aug. 2016
 
 @author: Ruud
 '''
+
+import configparser
+import os
 import re
 from functools import singledispatch, update_wrapper
 
-block_size = 4
-'''The XDR basic block size is 4 bytes. All XDR data elements are encoded to a byte sequence with a length that is a multiple of the basic block size.
+_install_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+config_file = os.path.join(_install_dir, 'etc', 'xdr.ini')
+
+config = configparser.ConfigParser()
+with open(os.path.join(config_file)) as f:
+    config.read_file(f)
+
+if config['DEFAULT'].get('install_dir') != _install_dir:
+    config['DEFAULT']['install_dir'] = _install_dir
+    with open(config_file, "w") as f:
+        config.write(f)
+
+_xdr_settings = config['xdr']
+
+block_size = _xdr_settings.getint('block_size', fallback=4)
+'''The XDR basic block size defaults 4 bytes. All XDR data elements are encoded to a byte sequence with a length that is a multiple of the basic block size.
 If necessary, the byte sequences are padded with NULL bytes.'''
 
-endian = '>'  # Big-endian format character for struct.pack
-'''Single character that indicates the byte order, as defined in the :mod:`struct` module. XDR uses big-endian byte order.''' 
+endian = _xdr_settings.get('endian', '>')
+'''Single character that indicates the byte order, as defined in the :mod:`struct` module. XDR defaults to big-endian byte order.''' 
+
+byteorder = 'big' if endian == '>' else 'little'
+
 
 _reserved_words = {'bool',
                    'case',

@@ -6,16 +6,16 @@ Created on 29 dec. 2015
 import unittest
 
 from xdrlib2 import *
+from xdrlib2.xdr_types import _padding
 
-
-class TestFixedBytes(unittest.TestCase):
-    class FixedLengthOpaque(FixedBytes):
+class TestFixedOpaque(unittest.TestCase):
+    class FixedLengthOpaque(FixedOpaque):
         size = 5
     
     def test_fixed_length_opaque_from_bytes(self):
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = self.FixedLengthOpaque(byte_str)
-        self.assertIsInstance(blob, FixedBytes)
+        self.assertIsInstance(blob, FixedOpaque)
         self.assertIsInstance(blob, bytearray)
         self.assertEqual(blob, byte_str)
     
@@ -23,7 +23,7 @@ class TestFixedBytes(unittest.TestCase):
         int_list = [0, 255,0xab, 0xcd, 1]
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = self.FixedLengthOpaque(int_list)
-        self.assertIsInstance(blob, FixedBytes)
+        self.assertIsInstance(blob, FixedOpaque)
         self.assertIsInstance(blob, bytearray)
         self.assertEqual(blob, byte_str)
         
@@ -31,7 +31,7 @@ class TestFixedBytes(unittest.TestCase):
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = self.FixedLengthOpaque(byte_str)
         bp = encode(blob)
-        self.assertEqual(bp, byte_str + b'\0\0\0')
+        self.assertEqual(bp, byte_str + _padding(5))
         x = decode(self.FixedLengthOpaque, bp)
         self.assertIsInstance(x, self.FixedLengthOpaque)
         self.assertEqual(x, blob)
@@ -45,24 +45,24 @@ class TestFixedBytes(unittest.TestCase):
         self.assertRaises(ValueError, self.FixedLengthOpaque, b'1234567890')
     
     def test_fixed_length_opaque_decode_errors(self):
-        self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'1234')
-        self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'12345678')
+        self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'1234' + _padding(4))
+        self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'12345678' + _padding(8))
     
     def test_fixed_opaque_class_construction(self):
-        my_cls = FixedBytes.typedef('my_cls', 5)
-        self.assertTrue(issubclass(my_cls, FixedBytes))
-        self.assertTrue(FixedBytes in my_cls.__mro__)
+        my_cls = FixedOpaque.typedef('my_cls', 5)
+        self.assertTrue(issubclass(my_cls, FixedOpaque))
+        self.assertTrue(FixedOpaque in my_cls.__mro__)
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = my_cls(byte_str)
         self.assertIsInstance(blob, bytearray)
         self.assertIsInstance(blob, my_cls)
         self.assertEqual(blob, byte_str)
         bp = encode(blob)
-        self.assertEqual(bp, byte_str + b'\0\0\0')
+        self.assertEqual(bp, byte_str + _padding(5))
         self.assertEqual(decode(my_cls, bp), blob)
     
     def test_fixed_opaque_with_size_0(self):
-        my_cls = FixedBytes.typedef('my_cls', 0)
+        my_cls = FixedOpaque.typedef('my_cls', 0)
         blob = my_cls(())
         self.assertIsInstance(blob, bytearray)
         self.assertIsInstance(blob, my_cls)
@@ -77,7 +77,7 @@ class TestFixedBytes(unittest.TestCase):
         blob[2] = 0
         self.assertEqual(blob, b'\0\xff\0\xcd\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\xff\0\xcd\x01' + b'\0\0\0')
+        self.assertEqual(bp, b'\0\xff\0\xcd\x01' + _padding(5))
         self.assertEqual(decode(self.FixedLengthOpaque, bp), blob)
 
     def test_fixed_length_opaque_slice_replacement(self):
@@ -86,7 +86,7 @@ class TestFixedBytes(unittest.TestCase):
         blob[2:4] = b'\0\0'
         self.assertEqual(blob, b'\0\xff\0\0\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\xff\0\0\x01' + b'\0\0\0')
+        self.assertEqual(bp, b'\0\xff\0\0\x01' + _padding(5))
         self.assertEqual(decode(self.FixedLengthOpaque, bp), blob)
 
     def test_fixed_length_size_change_fails(self):
@@ -111,20 +111,20 @@ class TestFixedBytes(unittest.TestCase):
         self.assertEqual(no, None)
         y_b = encode(yes)
         n_b = encode(no)
-        self.assertEqual(y_b, b'\0\0\0\x01' + byte_str + b'\0\0\0')
-        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(y_b, encode(TRUE) + byte_str + _padding(5)) # @UndefinedVariable
+        self.assertEqual(n_b, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
         
     def test_simple_subclassing(self):
-        subcls = FixedBytes(5)
+        subcls = FixedOpaque(5)
         x = subcls(b'12345')
-        self.assertIsInstance(x, FixedBytes)
-        self.assertEqual(encode(x), b'12345\0\0\0')
+        self.assertIsInstance(x, FixedOpaque)
+        self.assertEqual(encode(x), b'12345' + _padding(5))
         
 
 class TestVarOpaque(unittest.TestCase):
-    class VarLengthOpaque(VarBytes):
+    class VarLengthOpaque(VarOpaque):
         _size = 9
  
     def test_var_length_opaque_from_bytes(self):
@@ -134,7 +134,7 @@ class TestVarOpaque(unittest.TestCase):
         self.assertIsInstance(blob, self.VarLengthOpaque)
         self.assertEqual(blob, byte_str)
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05' + byte_str + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(5)) + byte_str + _padding(5))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
          
     def test_var_length_opaque_from_integers(self):
@@ -145,7 +145,7 @@ class TestVarOpaque(unittest.TestCase):
         self.assertIsInstance(blob, self.VarLengthOpaque)
         self.assertEqual(blob, byte_str)
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05' + byte_str + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(5)) + byte_str + _padding(5))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
          
     def test_var_length_opaque_one_by_one_from_integers(self):
@@ -161,16 +161,16 @@ class TestVarOpaque(unittest.TestCase):
             self.assertEqual(blob, byte_str[:i+1])
             self.assertEqual(identity, id(blob))
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05' + byte_str + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(5)) + byte_str + _padding(5))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
          
     def test_var_length_opaque_errors(self):
         self.assertRaises(ValueError, self.VarLengthOpaque, b'1234567890')
      
-    def test_var_length_opaque_unpack_errors(self):
-        self.assertRaises(ValueError, decode, self.VarLengthOpaque, b'\0\0\0\x051234')
-        self.assertRaises(ValueError, decode, self.VarLengthOpaque, b'\0\0\0\x0a1234567890\0\0\0')
-        self.assertRaises(ValueError, decode, self.VarLengthOpaque, b'\0\0\0\x01abcd')
+    def test_var_length_opaque_decode_errors(self):
+        self.assertRaises(ValueError, decode, self.VarLengthOpaque, encode(Int32u(5)) + b'1234')
+        self.assertRaises(ValueError, decode, self.VarLengthOpaque, encode(Int32u(10)) + b'1234567890' + _padding(9))
+        self.assertRaises(ValueError, decode, self.VarLengthOpaque, encode(Int32u(1)) + b'abcd' + _padding(4))
      
     def test_can_append_to_var_length_opaque(self):
         byte_str = b'\0\xff\xab\xcd\x01'
@@ -179,7 +179,7 @@ class TestVarOpaque(unittest.TestCase):
             blob.append(b)
         self.assertEqual(blob, byte_str + b'fill')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x09' + byte_str + b'fill' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(9)) + byte_str + b'fill' + _padding(9))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
  
     def test_can_extend_var_length_opaque(self):
@@ -188,7 +188,7 @@ class TestVarOpaque(unittest.TestCase):
         blob.extend(b'fill')
         self.assertEqual(blob, byte_str + b'fill')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x09' + byte_str + b'fill' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(9)) + byte_str + b'fill' + _padding(9))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
      
     def test_can_delete_item_from_var_length_opaque(self):
@@ -197,7 +197,7 @@ class TestVarOpaque(unittest.TestCase):
         del blob[3]
         self.assertEqual(blob, b'\0\xff\xab\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x04\0\xff\xab\x01')
+        self.assertEqual(bp, encode(Int32u(4)) + b'\0\xff\xab\x01' + _padding(4))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
          
     def test_can_delete_slice_from_var_length_opaque(self):
@@ -206,7 +206,7 @@ class TestVarOpaque(unittest.TestCase):
         del blob[1:3]
         self.assertEqual(blob, b'\0\xcd\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x03\0\xcd\x01\0')
+        self.assertEqual(bp, encode(Int32u(3)) + b'\0\xcd\x01' + _padding(3))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
      
     def test_error_when_var_length_opaque_grows_too_large(self):
@@ -226,20 +226,20 @@ class TestVarOpaque(unittest.TestCase):
             blob *= 5
      
     def test_var_opaque_class_construction(self):
-        my_cls = VarBytes.typedef('my_cls', 9)
-        self.assertTrue(issubclass(my_cls, VarBytes))
-        self.assertTrue(VarBytes in my_cls.__mro__)
+        my_cls = VarOpaque.typedef('my_cls', 9)
+        self.assertTrue(issubclass(my_cls, VarOpaque))
+        self.assertTrue(VarOpaque in my_cls.__mro__)
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = my_cls(byte_str)
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05' + byte_str + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(5)) + byte_str + _padding(5))
         self.assertEqual(decode(my_cls, bp), blob)
      
     def test_empty_var_opaque(self):
         blob = self.VarLengthOpaque(b'')
         bp = encode(blob)
         self.assertEqual(blob, b'')
-        self.assertEqual(bp, b'\0\0\0\0')
+        self.assertEqual(bp, encode(Int32u(0)))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
  
     def test_var_length_opaque_item_replacement(self):
@@ -248,7 +248,7 @@ class TestVarOpaque(unittest.TestCase):
         blob[2] = 0
         self.assertEqual(blob, b'\0\xff\0\xcd\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05\0\xff\0\xcd\x01' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(5)) + b'\0\xff\0\xcd\x01' + _padding(5))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
      
     def test_var_length_opaque_augmented_addition(self):
@@ -257,16 +257,16 @@ class TestVarOpaque(unittest.TestCase):
         blob += b'fill'
         self.assertEqual(blob, byte_str + b'fill')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x09' + byte_str + b'fill' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(9)) + byte_str + b'fill' + _padding(9))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
  
     def test_var_length_opaque_slice_replacement(self):
         byte_str = b'\0\xff\xab\xcd\x01'
         blob = self.VarLengthOpaque(byte_str)
-        blob[2:4] = b'\0\0'
-        self.assertEqual(blob, b'\0\xff\0\0\x01')
+        blob[2:4] = b'\0\0\xff\xff'
+        self.assertEqual(blob, b'\0\xff\0\0\xff\xff\x01')
         bp = encode(blob)
-        self.assertEqual(bp, b'\0\0\0\x05\0\xff\0\0\x01' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(7)) + b'\0\xff\0\0\xff\xff\x01' + _padding(7))
         self.assertEqual(decode(self.VarLengthOpaque, bp), blob)
      
     def test_optional_var_length_opaque(self):
@@ -279,16 +279,16 @@ class TestVarOpaque(unittest.TestCase):
         self.assertEqual(no, None)
         y_b = encode(yes)
         n_b = encode(no)
-        self.assertEqual(y_b, b'\0\0\0\x01' + b'\0\0\0\x05' + byte_str + b'\0\0\0')
-        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(y_b, encode(TRUE) + encode(Int32u(5)) + byte_str + _padding(5)) # @UndefinedVariable
+        self.assertEqual(n_b, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
          
     def test_simple_subclassing(self):
-        subcls = VarBytes(5)
+        subcls = VarOpaque(5)
         x = subcls(b'123')
-        self.assertIsInstance(x, VarBytes)
-        self.assertEqual(encode(x), b'\0\0\0\x03' b'123\0')
+        self.assertIsInstance(x, VarOpaque)
+        self.assertEqual(encode(x), encode(Int32u(3)) +  b'123' + _padding(3))
 
  
 class TestString(unittest.TestCase):
@@ -302,7 +302,7 @@ class TestString(unittest.TestCase):
         self.assertIsInstance(s, self.MyString)
         self.assertEqual(s, byte_str)
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + byte_str)
+        self.assertEqual(bp, encode(Int32u(12)) + byte_str + _padding(12))
         self.assertEqual(decode(self.MyString, bp), s)
      
     def test_string_errors(self):
@@ -310,7 +310,7 @@ class TestString(unittest.TestCase):
      
     def test_string_unpack_errors(self):
         self.assertRaises(ValueError, decode, self.MyString, b'\0\0\0\x0ftoo short')
-        self.assertRaises(ValueError, decode, self.MyString, b'\0\0\0\x0fthis is way too long')
+        self.assertRaises(ValueError, decode, self.MyString, b'\0\0\0\x0fthis is way too long' + _padding(20))
  
     def test_string_class_construction(self):
         my_cls = String.typedef('my_cls', 15)
@@ -319,13 +319,13 @@ class TestString(unittest.TestCase):
         byte_str = b'Hello world!'
         s = my_cls(byte_str)
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + byte_str)
+        self.assertEqual(bp, encode(Int32u(12)) + byte_str)
         self.assertEqual(decode(my_cls, bp), s)
      
     def test_empty_string(self):
         s = self.MyString(b'')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\0')
+        self.assertEqual(bp, encode(Int32u(0)))
         self.assertEqual(decode(self.MyString, bp), s)
       
     def test_can_append_to_string(self):
@@ -335,7 +335,7 @@ class TestString(unittest.TestCase):
             s.append(b)
         self.assertEqual(s, byte_str + b'world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + b'Hello world!')
+        self.assertEqual(bp, encode(Int32u(12)) + b'Hello world!' + _padding(12))
         self.assertEqual(decode(self.MyString, bp), s)
  
     def test_can_extend_string(self):
@@ -344,7 +344,7 @@ class TestString(unittest.TestCase):
         s.extend(b'world!')
         self.assertEqual(s, b'Hello world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + b'Hello world!')
+        self.assertEqual(bp, encode(Int32u(12)) + b'Hello world!' + _padding(12))
         self.assertEqual(decode(self.MyString, bp), s)
      
     def test_can_delete_item_from_string(self):
@@ -353,7 +353,7 @@ class TestString(unittest.TestCase):
         del s[4]
         self.assertEqual(s, b'Hell world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0b' + b'Hell world!' + b'\0')
+        self.assertEqual(bp, encode(Int32u(11)) + b'Hell world!' + _padding(11))
         self.assertEqual(decode(self.MyString, bp), s)
          
     def test_can_delete_slice_from_string(self):
@@ -362,7 +362,7 @@ class TestString(unittest.TestCase):
         del s[1:4]
         self.assertEqual(s, b'Ho world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x09' + b'Ho world!' + b'\0\0\0')
+        self.assertEqual(bp, encode(Int32u(9)) + b'Ho world!' + _padding(9))
         self.assertEqual(decode(self.MyString, bp), s)
  
     def test_string_grows_too_large(self):
@@ -385,7 +385,7 @@ class TestString(unittest.TestCase):
         s[6] = ord(b'W')
         self.assertEqual(s, b'Hello World!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + b'Hello World!')
+        self.assertEqual(bp, encode(Int32u(12)) + b'Hello World!' + _padding(12))
         self.assertEqual(decode(self.MyString, bp), s)
      
     def test_string_augmented_addition(self):
@@ -394,7 +394,7 @@ class TestString(unittest.TestCase):
         s += b'world!'
         self.assertEqual(s, b'Hello world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0c' + b'Hello world!')
+        self.assertEqual(bp, encode(Int32u(12)) + b'Hello world!' + _padding(12))
         self.assertEqual(decode(self.MyString, bp), s)
  
     def test_string_slice_replacement(self):
@@ -403,7 +403,7 @@ class TestString(unittest.TestCase):
         s[1:5] = b'i there'
         self.assertEqual(s, b'Hi there world!')
         bp = encode(s)
-        self.assertEqual(bp, b'\0\0\0\x0f' + b'Hi there world!' + b'\0')
+        self.assertEqual(bp, encode(Int32u(15)) + b'Hi there world!' + _padding(15))
         self.assertEqual(decode(self.MyString, bp), s)
      
     def test_optional_string(self):
@@ -416,8 +416,8 @@ class TestString(unittest.TestCase):
         self.assertEqual(no, None)
         y_b = encode(yes)
         n_b = encode(no)
-        self.assertEqual(y_b, b'\0\0\0\x01' + b'\0\0\0\x0c' + byte_str)
-        self.assertEqual(n_b, b'\0\0\0\0')
+        self.assertEqual(y_b, encode(TRUE) + encode(Int32u(12)) + byte_str + _padding(12))  # @UndefinedVariable
+        self.assertEqual(n_b, encode(FALSE))  # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
@@ -425,7 +425,7 @@ class TestString(unittest.TestCase):
         subcls = String(5)
         x = subcls(b'123')
         self.assertIsInstance(x, String)
-        self.assertEqual(encode(x), b'\0\0\0\x03' b'123\0')
+        self.assertEqual(encode(x), encode(Int32u(3)) + b'123' + _padding(3))
              
 
 if __name__ == "__main__":

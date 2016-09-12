@@ -18,7 +18,7 @@ from grako.parsing import graken, Parser
 from grako.util import re, RE_FLAGS, generic_main  # noqa
 
 
-__version__ = (2016, 9, 8, 14, 1, 37, 3)
+__version__ = (2016, 9, 12, 14, 53, 17, 0)
 
 __all__ = [
     'xdrParser',
@@ -145,26 +145,26 @@ class xdrParser(Parser):
                 self._token(';')
             self._error('no available options')
 
-    @graken()
+    @graken('TypeDef')
     def _typedef_(self):
         self._declaration_()
 
-    @graken()
+    @graken('EnumDef')
     def _enumdef_(self):
         self._identifier_()
         self._enum_body_()
 
-    @graken()
+    @graken('StructDef')
     def _structdef_(self):
         self._identifier_()
         self._struct_body_()
 
-    @graken()
+    @graken('UnionDef')
     def _uniondef_(self):
         self._identifier_()
         self._union_body_()
 
-    @graken()
+    @graken('ConstantDef')
     def _constant_def_(self):
         self._token('const')
         self._identifier_()
@@ -276,15 +276,15 @@ class xdrParser(Parser):
     def _type_specifier_(self):
         with self._choice():
             with self._option():
-                self._constant('unsigned_int')
-                self.name_last_node('@')
                 self._token('unsigned')
                 self._token('int')
-            with self._option():
-                self._constant('unsigned_hyper')
+                self._constant('unsigned_int')
                 self.name_last_node('@')
+            with self._option():
                 self._token('unsigned')
                 self._token('hyper')
+                self._constant('unsigned_hyper')
+                self.name_last_node('@')
             with self._option():
                 self._token('int')
             with self._option():
@@ -313,7 +313,7 @@ class xdrParser(Parser):
         self._enum_body_()
         self.name_last_node('@')
 
-    @graken()
+    @graken('EnumBody')
     def _enum_body_(self):
         self._token('{')
         with self._group():
@@ -341,7 +341,7 @@ class xdrParser(Parser):
         self._struct_body_()
         self.name_last_node('@')
 
-    @graken()
+    @graken('StructBody')
     def _struct_body_(self):
         self._token('{')
 
@@ -358,7 +358,7 @@ class xdrParser(Parser):
         self._union_body_()
         self.name_last_node('@')
 
-    @graken()
+    @graken('UnionBody')
     def _union_body_(self):
         self._token('switch')
         self._token('(')
@@ -400,15 +400,15 @@ class xdrParser(Parser):
             ['case']
         )
 
-    @graken()
+    @graken('int')
     def _decimal_constant_(self):
         self._pattern(r'-?[1-9][0-9]*')
 
-    @graken()
+    @graken('int', base=16)
     def _hexadecimal_constant_(self):
         self._pattern(r'0x[0-9a-fA-F]+')
 
-    @graken()
+    @graken('int', base=8)
     def _octal_constant_(self):
         self._pattern(r'0[0-7]*')
 

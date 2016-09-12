@@ -11,6 +11,7 @@ class TestPackageStructure(unittest.TestCase):
     def test_can_access_xdrlib2(self):
         self.assertIsInstance(block_size, int)
         self.assertIsInstance(endian, str)
+        self.assertIsInstance(byteorder, str)
 
 
 class TestVoid(unittest.TestCase):

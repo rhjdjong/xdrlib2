@@ -29,8 +29,8 @@ __all__ = ['encode',
            'Boolean',
            'FALSE',
            'TRUE',
-           'FixedBytes',
-           'VarBytes',
+           'FixedOpaque',
+           'VarOpaque',
            'String',
            'Void',
            'FixedArray',
@@ -65,7 +65,10 @@ def _unpack(fmt, size, source):
 def _pad(byte_string):
     '''Pads `byte_string` with NULL bytes, to make the length a multiple of `block_size`'''
     size = len(byte_string)
-    return byte_string + b'\0'*_pad_size(size)
+    return byte_string + _padding(size)
+
+def _padding(size):
+    return bytes(_pad_size(size))
 
 def _pad_size(size):
     '''Return the number of NULL bytes that must be added a bytestring of length `size`'''
@@ -200,7 +203,15 @@ def Optional(orig_cls):
         
 
             
-class _Atomic(XdrObject):
+class Atomic(XdrObject):
+    def __new__(cls, value):
+        try:
+            cls._fmt
+        except AttributeError:
+            raise NotImplementedError("Cannot instantiate abstract '{}' class"
+                                      .format(cls.__name__))
+        return super().__new__(cls, value)
+
     @classmethod
     def _prepare(cls, dct):
         for name, value in dct.items():
@@ -225,7 +236,7 @@ class _Atomic(XdrObject):
 
 
 
-class _Integer(_Atomic, int):
+class Integer(Atomic, int):
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
         if cls._min <= v < cls._max:
@@ -233,12 +244,12 @@ class _Integer(_Atomic, int):
         raise ValueError('Value out of range for class {}: {}'.format(cls.__name__, v))
 
 
-class _Float(_Atomic, float):
+class Float(Atomic, float):
     def __new__(cls, value=0.0):
         return super().__new__(cls, value)
     
     
-class Int32(_Integer):
+class Int32(Integer):
     '''Representation of an XDR signed integer.
     
     Int32 is a subclass of :class:`int` that accepts values in the range [-2\ :sup:`31`\ , 2\ :sup:`31`\ -1]. Default value is 0.
@@ -249,7 +260,7 @@ class Int32(_Integer):
     fmt = 'i'
     
         
-class Int32u(_Integer):
+class Int32u(Integer):
     '''Representation of an XDR unsigned integer.
     
     Int32u is a subclass of :class:`int` that accepts values in the range [0, 2\ :sup:`32`\ -1]. Default value is 0.
@@ -260,7 +271,7 @@ class Int32u(_Integer):
     fmt = 'I'
 
     
-class Int64(_Integer):
+class Int64(Integer):
     '''Representation of an XDR signed hyper integer.
     
     Int64 is a subclass of :class:`int` that accepts values in the range [-2\ :sup:`63`\ , 2\ :sup:`63`\ -1]. Default value is 0.
@@ -271,7 +282,7 @@ class Int64(_Integer):
     fmt = 'q'
 
 
-class Int64u(_Integer):
+class Int64u(Integer):
     '''Representation of an XDR unsigned hyper integer.
     
     Int64u is a subclass of :class:`int` that accepts values in the range [0, 2\ :sup:`64`\ -1]. Default value is 0.
@@ -395,7 +406,7 @@ class Boolean(Enumeration):
     TRUE = 1
             
     
-class Float32(_Float):
+class Float32(Float):
     '''Representation of an XDR floating-point value.
     
     Float32 is a subclass of :class:`float`. Default value is 0.0.
@@ -405,17 +416,17 @@ class Float32(_Float):
     fmt = 'f'
     
             
-class Float64(_Float):
+class Float64(Float):
     '''Representation of an XDR double-precision floating-point value.
     
     Float64 is a subclass of :class:`float`. Default value is 0.0.
     Encoded values are 8 bytes long. Note that encoding a Python float
-    as Float32 will in general *not* result in loss of precision.
+    as Float64 will in general *not* result in loss of precision.
     '''
     fmt = 'd'
     
 
-class Float128(_Float):            
+class Float128(Float):            
     '''Representation of an XDR quadruple-precision floating-point value.
     
     Float128 is a subclass of :class:`float`. Default value is 0.0.
@@ -572,7 +583,15 @@ class Float128(_Float):
         return v, source
         
 
-class _Sequence(XdrObject):
+class Sequence(XdrObject):
+    def __new__(cls, data):
+        try:
+            cls._size
+        except AttributeError:
+            raise NotImplementedError("Cannot instantiate abstract '{}' class"
+                                      .format(cls.__name__))
+        return super().__new__(cls, data)
+    
     def __init__(self, data):
         self._check_size(len(data))
         super().__init__(data)
@@ -602,14 +621,14 @@ class _Sequence(XdrObject):
         return self.__class__(super().__mul__(number))
 
 
-class _FixedSequence(_Sequence):
+class FixedSequence(Sequence):
     @classmethod
     def _check_size(cls, size):
         if size != cls._size:
             raise(ValueError("Incorrect size '{}' for '{}' object. Expected '{}'."
                              .format(size, cls.__name__, cls._size)))
 
-class _VarSequence(_Sequence):
+class VarSequence(Sequence):
     @classmethod
     def _check_size(cls, size):
         if size > cls._size:
@@ -617,9 +636,9 @@ class _VarSequence(_Sequence):
                              .format(size, cls.__name__, cls._size)))
             
     
-class _Bytes(_Sequence, bytearray):
-    def __new__(cls, data):
-        return super().__new__(cls, data)
+class Opaque(Sequence, bytearray):
+#     def __new__(cls, data):
+#         return super().__new__(cls, data)
 
     @classmethod
     def _prepare(cls, dct):
@@ -658,7 +677,7 @@ class _Bytes(_Sequence, bytearray):
         return self.__class__(super().__add__(other))
     
 
-class FixedBytes(_FixedSequence, _Bytes):
+class FixedOpaque(FixedSequence, Opaque):
     def __new__(cls, *args):
         if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
             return cls.typedef(cls.__name__+'[{}]'.format(args[0]), size=args[0])
@@ -681,7 +700,7 @@ class FixedBytes(_FixedSequence, _Bytes):
         return cls(data), source
         
         
-class _VarBytes(_VarSequence, _Bytes):
+class _VarOpaque(VarSequence, Opaque):
     def __new__(cls, *args):
         if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
             return cls.typedef(cls.__name__+'<{}>'.format(args[0]), size=args[0])
@@ -708,15 +727,15 @@ class _VarBytes(_VarSequence, _Bytes):
         return cls(data), source
 
     
-class VarBytes(_VarBytes):
+class VarOpaque(_VarOpaque):
     pass
 
 
-class String(_VarBytes):
+class String(_VarOpaque):
     pass
 
 
-class _Array(_Sequence, list):
+class Array(Sequence, list):
     @classmethod
     def _prepare(cls, dct):
         for name, value in dct.items():
@@ -756,7 +775,7 @@ class _Array(_Sequence, list):
         return self.__class__(super().__add__(self._type(v) for v in other))
     
 
-class FixedArray(_FixedSequence, _Array):
+class FixedArray(FixedSequence, Array):
     def __new__(cls, *args):
         if not hasattr(cls, '_size') and len(args) == 2:
             if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
@@ -789,7 +808,7 @@ class FixedArray(_FixedSequence, _Array):
         return cls(lst), source
 
 
-class VarArray(_VarSequence, _Array):
+class VarArray(VarSequence, Array):
     def __new__(cls, *args):
         if not hasattr(cls, '_size') and len(args) == 2:
             if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
@@ -823,6 +842,9 @@ class VarArray(_VarSequence, _Array):
 
 class Structure(XdrObject):
     def __new__(cls, *args, **kwargs):
+        if not cls._types:
+            raise NotImplementedError("Cannot instantiate abstract '{}' class"
+                                      .format(cls.__name__))
         return super().__new__(cls)
     
     def __init__(self, *args, **kwargs):
@@ -924,6 +946,9 @@ _UnionTuple = namedtuple('_UnionTuple', 'switch case')
     
 class Union(XdrObject, _UnionTuple):
     def __new__(cls, variant, *args, **kwargs):
+        if not cls._types:
+            raise NotImplementedError("Cannot instantiate abstract '{}' class"
+                                      .format(cls.__name__))
         switch = cls._types['switch'](variant)
         case_type = cls._case_type(switch)
         value = case_type(*args, **kwargs)

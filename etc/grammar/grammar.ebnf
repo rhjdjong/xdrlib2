@@ -26,23 +26,23 @@ type_def
 	| "union" @:uniondef ";"
 	;
 
-typedef
+typedef::TypeDef
 	= declaration
 	;
 
-enumdef
+enumdef::EnumDef
 	= identifier enum_body
 	;
 
-structdef
+structdef::StructDef
 	= identifier struct_body
 	;
 
-uniondef
+uniondef::UnionDef
 	= identifier union_body
 	;
 
-constant_def
+constant_def::ConstantDef
 	= "const" @:identifier "=" @:constant ";"
 	;
 	
@@ -66,8 +66,8 @@ constant
 	;
 
 type_specifier
-	= @:`unsigned_int` "unsigned" "int"
-	| @:`unsigned_hyper` "unsigned" "hyper"
+	= "unsigned" "int" @:`unsigned_int`
+	| "unsigned" "hyper" @:`unsigned_hyper`
 	| "int"
 	| "hyper"
 	| "float"
@@ -84,7 +84,7 @@ enum_type_spec
 	= "enum" @:enum_body
 	;
 
-enum_body
+enum_body::EnumBody
 	= "{" ( ",".{ @+:enum_item }+ )"}"
 	;
 
@@ -96,7 +96,7 @@ struct_type_spec
 	= "struct" @:struct_body
 	;
 
-struct_body
+struct_body::StructBody
 	= "{" { @+:declaration ";" }+ "}"
 	;
 
@@ -104,7 +104,7 @@ union_type_spec
 	= "union" @:union_body
 	;
 
-union_body
+union_body::UnionBody
 	= "switch" "(" switch:declaration ")" "{"
 		variants:{case_spec}+
 		["default" ":" default:declaration ";" ]
@@ -116,15 +116,15 @@ case_spec
 	;
 
 
-decimal_constant
+decimal_constant(int)
 	= /-?[1-9][0-9]*/
 	;
 	
-hexadecimal_constant
+hexadecimal_constant(int, base=16)
 	= /0x[0-9a-fA-F]+/
 	;
 	
-octal_constant
+octal_constant(int, base=8)
 	= /0[0-7]*/
 	;
 	

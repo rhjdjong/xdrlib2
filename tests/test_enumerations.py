@@ -47,17 +47,17 @@ class TestDerivedEnumeration(unittest.TestCase):
         self.assertEqual(v, 2)
 
     def test_encoding_and_decoding(self):
-        for v, p in ((RED, b'\0\0\0\x02'), # @UndefinedVariable
-                     (YELLOW, b'\0\0\0\x03'), # @UndefinedVariable
-                     (BLUE, b'\0\0\0\x05'), # @UndefinedVariable
+        for v, p in ((RED, encode(Int32(2))), # @UndefinedVariable
+                     (YELLOW, encode(Int32(3))), # @UndefinedVariable
+                     (BLUE, encode(Int32(5))), # @UndefinedVariable
                     ):
             self.assertEqual(encode(v), p)
             x = decode(self.MyEnum, p)
             self.assertIsInstance(x, self.MyEnum)
             self.assertEqual(x, v)
-        for v, p in ((TEXT, b'\0\0\0\0'), # @UndefinedVariable
-                     (DATA, b'\0\0\0\x01'), # @UndefinedVariable
-                     (EXEC, b'\0\0\0\x02'), # @UndefinedVariable
+        for v, p in ((TEXT, encode(Int32(0))), # @UndefinedVariable
+                     (DATA, encode(Int32(1))), # @UndefinedVariable
+                     (EXEC, encode(Int32(2))), # @UndefinedVariable
                     ):
             self.assertEqual(encode(v), p)
             x = decode(self.FileKind, p)
@@ -65,8 +65,8 @@ class TestDerivedEnumeration(unittest.TestCase):
             self.assertEqual(x, v)
     
     def test_decoding_invalid_data_fails(self):
-        self.assertRaises(ValueError, decode, self.MyEnum, b'\0\0\0\0')
-        self.assertRaises(ValueError, decode, self.FileKind, b'\xff\xff\xff\xff')
+        self.assertRaises(ValueError, decode, self.MyEnum, encode(Int32(0)))
+        self.assertRaises(ValueError, decode, self.FileKind, encode(Int32(0x07ffffff)))
     
     def test_existing_enumerations_cannot_be_extended(self):
         self.assertRaises(ValueError, self.MyEnum.typedef, 'OtherEnum', GREEN=8)

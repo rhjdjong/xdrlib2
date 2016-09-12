@@ -7,7 +7,7 @@ import unittest
 import math
 
 from xdrlib2 import *
-
+from xdrlib2.xdr_types import _padding, _pad_size
 
 class TestFloats(unittest.TestCase):
     bin_data = {
@@ -24,7 +24,10 @@ class TestFloats(unittest.TestCase):
         f_size = self.bin_data[cls]['f']
         self.assertEqual(len(source), size)
         
-        number = int.from_bytes(source, 'big')
+        if _pad_size(size) > 0:
+            source = source[:-_pad_size(size)]
+            
+        number = int.from_bytes(source, byteorder)
         fraction = number & ((1<<f_size)-1)
         number >>= f_size
         exponent = number & ((1<<e_size)-1)
@@ -37,7 +40,7 @@ class TestFloats(unittest.TestCase):
         size = self.bin_data[cls]['size']
         e_size = self.bin_data[cls]['e']
         f_size = self.bin_data[cls]['f']
-        return ((sign << (e_size + f_size)) | (exponent << f_size) | fraction).to_bytes(size, 'big')
+        return ((sign << (e_size + f_size)) | (exponent << f_size) | fraction).to_bytes(size, byteorder) + _padding(size)
         
         
     def test_default_instantation(self):

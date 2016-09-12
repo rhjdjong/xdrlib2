@@ -6,6 +6,7 @@ Created on 5 sep. 2016
 import unittest
 
 from xdrlib2 import *
+from xdrlib2.xdr_types import _padding
 
 class TestUnion(unittest.TestCase):
     class SimpleUnion(Union):
@@ -14,7 +15,7 @@ class TestUnion(unittest.TestCase):
                 2: ('flag', Boolean),
                 3: String.typedef('name', 10),
                 4: ('foo', Int32u.typedef('bar')),
-                'default': ('whatever', FixedBytes.typedef('x', 4)),
+                'default': ('whatever', FixedOpaque.typedef('x', 4)),
                 }
        
     SimpleUnionFromEnum = Union.typedef('SimpleUnionFromEnum',
@@ -55,9 +56,9 @@ class TestUnion(unittest.TestCase):
         b_a = encode(a)
         b_b = encode(b)
         b_c = encode(c)
-        self.assertEqual(b_a, b'\0\0\0\x01')
-        self.assertEqual(b_b, b'\0\0\0\x02' + encode(Int32(12345)))
-        self.assertEqual(b_c, b'\0\0\0\x03\0\0\0\x01')
+        self.assertEqual(b_a, encode(Int32(1)))
+        self.assertEqual(b_b, encode(Int32(2)) + encode(Int32(12345)))
+        self.assertEqual(b_c, encode(Int32(3)) + encode(TRUE)) # @UndefinedVariable
         self.assertEqual(decode(self.SimpleUnionFromEnum, b_a), a)
         self.assertEqual(decode(self.SimpleUnionFromEnum, b_b), b)
         self.assertEqual(decode(self.SimpleUnionFromEnum, b_c), c)
@@ -70,7 +71,7 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(u.switch, 1)
             
         bp = encode(u)
-        self.assertEqual(bp, b'\0\0\0\x01')
+        self.assertEqual(bp, encode(Int32(1)))
         self.assertEqual(decode(self.SimpleUnion, bp), u)
             
     def test_simple_union_2(self):
@@ -81,18 +82,22 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(u.switch, 2)
             
         bp = encode(u)
-        self.assertEqual(bp, b'\0\0\0\x02\0\0\0\x01')
+        self.assertEqual(bp, encode(Int32(2)) + encode(TRUE)) # @UndefinedVariable
         self.assertEqual(decode(self.SimpleUnion, bp), u)
             
     def test_simple_union_3(self):
-        u = self.SimpleUnion(3, b'hallo')
-        self.assertEqual(u, (3, b'hallo'))
+        s = b'hallo'
+        u = self.SimpleUnion(3, s)
+        self.assertEqual(u, (3, s))
         self.assertIsInstance(u.case, String)
-        self.assertEqual(u.case, b'hallo')
+        self.assertEqual(u.case, s)
         self.assertEqual(u.switch, 3)
     
         bp = encode(u)
-        self.assertEqual(bp, b'\0\0\0\x03\0\0\0\x05hallo\0\0\0')
+        self.assertEqual(bp, encode(Int32(3)) +
+                             encode(Int32u(len(s))) +
+                             s +
+                             _padding(len(s)))
         self.assertEqual(decode(self.SimpleUnion, bp), u)
             
     def test_simple_union_4(self):
@@ -103,18 +108,18 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(u.switch, 4)
             
         bp = encode(u)
-        self.assertEqual(bp, b'\0\0\0\x04\0\0\0\x0d')
+        self.assertEqual(bp, encode(Int32(4)) + encode(Int32u(13)))
         self.assertEqual(decode(self.SimpleUnion, bp), u)
             
     def test_simple_union_default(self):
         u = self.SimpleUnion(255, b'dumb')
         self.assertEqual(u, (255, b'dumb'))
-        self.assertIsInstance(u.case, FixedBytes)
+        self.assertIsInstance(u.case, FixedOpaque)
         self.assertEqual(u.case, b'dumb')
         self.assertEqual(u.switch, 255)
             
         bp = encode(u)
-        self.assertEqual(bp, b'\0\0\0\xffdumb')
+        self.assertEqual(bp, encode(Int32(255)) + b'dumb' + _padding(4))
         self.assertEqual(decode(self.SimpleUnion, bp), u)
   
     def test_optional_union(self):
@@ -132,7 +137,7 @@ class TestUnion(unittest.TestCase):
         self.assertEqual(y_3, (3, b'hallo'))
         self.assertIsInstance(y_4.case, Int32u)
         self.assertEqual(y_4, (4, 13))
-        self.assertIsInstance(y_5.case, FixedBytes)
+        self.assertIsInstance(y_5.case, FixedOpaque)
         self.assertEqual(y_5, (5, b'dumb'))
         self.assertEqual(no, None)
           
@@ -142,12 +147,12 @@ class TestUnion(unittest.TestCase):
         b_y4 = encode(y_4)
         b_y5 = encode(y_5)
         b_no = encode(no)
-        self.assertEqual(b_y1, b'\0\0\0\x01' b'\0\0\0\x01')
-        self.assertEqual(b_y2, b'\0\0\0\x01' b'\0\0\0\x02' b'\0\0\0\x01')
-        self.assertEqual(b_y3, b'\0\0\0\x01' b'\0\0\0\x03' b'\0\0\0\x05' b'hallo' b'\0\0\0')
-        self.assertEqual(b_y4, b'\0\0\0\x01' b'\0\0\0\x04' b'\0\0\0\x0d')
-        self.assertEqual(b_y5, b'\0\0\0\x01' b'\0\0\0\x05' b'dumb')
-        self.assertEqual(b_no, b'\0\0\0\0')
+        self.assertEqual(b_y1, encode(TRUE) + encode(Int32(1))) # @UndefinedVariable
+        self.assertEqual(b_y2, encode(TRUE) + encode(Int32(2)) + encode(TRUE)) # @UndefinedVariable
+        self.assertEqual(b_y3, encode(TRUE) + encode(Int32(3)) + encode(Int32u(5)) + b'hallo' + _padding(5)) # @UndefinedVariable
+        self.assertEqual(b_y4, encode(TRUE) + encode(Int32(4)) + encode(Int32u(13))) # @UndefinedVariable
+        self.assertEqual(b_y5, encode(TRUE) + encode(Int32(5)) + b'dumb' + _padding(4)) # @UndefinedVariable
+        self.assertEqual(b_no, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, b_y1), y_1)
         self.assertEqual(decode(optType, b_y2), y_2)
         self.assertEqual(decode(optType, b_y3), y_3)

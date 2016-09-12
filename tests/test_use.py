@@ -12,21 +12,17 @@ import configparser
 import datetime
 
 import xdrlib2
+from xdrlib2.xdr_base import config, config_file
+
 from fs.opener import fsopendir
 from fs.mountfs import MountFS
 
 logging.basicConfig(filename='test_use.log', level=logging.DEBUG)
-
-ini_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'etc', 'xdr.ini'))
-
-cp = configparser.ConfigParser()
-with open(ini_file) as f:
-    cp.read_file(f)
     
-real_fs = fsopendir('mount://' + ini_file)
+real_fs = fsopendir('mount://' + config_file)
     
-grammar = cp['files']['grammar']
-parser = cp['files']['parser']
+grammar = config['files']['grammar']
+parser = config['files']['parser']
 grammar_path = '/grammar/' + grammar
 parser_path = '/parser/' + parser
 
@@ -54,7 +50,7 @@ class TestParser(unittest.TestCase):
     def test_parser_is_generated_when_it_does_not_exist(self):
         self.fs.remove(parser_path)
         self.assertFalse(self.fs.exists(parser_path))
-        p = xdrlib2.use('example', fs=self.fs)
+        xdrlib2.use('example', fs=self.fs)
         self.assertTrue(self.fs.exists(parser_path))
         with real_fs.open(parser_path) as original:
             with self.fs.open(parser_path) as generated:
@@ -71,13 +67,22 @@ class TestParser(unittest.TestCase):
         self.assertLess(new_parser_mtime, parser_mtime)
         start_time = datetime.datetime.now()
         self.assertLess(new_parser_mtime, start_time - datetime.timedelta(hours=1))
-        p = xdrlib2.use('example', fs=self.fs)
+        xdrlib2.use('example', fs=self.fs)
         finish_time = datetime.datetime.now()
         generated_time = self.fs.getinfo(parser_path)['modified_time']
-        self.assertGreater(generated_time, start_time)
-        self.assertLess(generated_time, finish_time)
+        self.assertGreaterEqual(generated_time, start_time)
+        self.assertLessEqual(generated_time, finish_time)
         
-
+#     def test_use_example_adds_example_to_modules(self):
+#         self.assertNotIn('example', sys.modules)
+#         xdrlib2.use('example')
+#         self.assertIn('example', sys.modules)
+#     
+#     def test_use_example_check_module_contents(self):
+#         xdrlib2.use('example')
+#         self.assertEqual(example.MAXUSERNAME, 32)  # @UndefinedVariable
+#         self.assertEqual(example.MAXFILELEN, 65535)  # @UndefinedVariable
+#         self.assertEqual(example.MAXNAMELEN, 255)  # @UndefinedVariable
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
