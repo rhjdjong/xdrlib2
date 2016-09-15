@@ -49,7 +49,7 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'12345678' + _padding(8))
     
     def test_fixed_opaque_class_construction(self):
-        my_cls = FixedOpaque.typedef('my_cls', 5)
+        my_cls = FixedOpaque(size=5)
         self.assertTrue(issubclass(my_cls, FixedOpaque))
         self.assertTrue(FixedOpaque in my_cls.__mro__)
         byte_str = b'\0\xff\xab\xcd\x01'
@@ -62,7 +62,7 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertEqual(decode(my_cls, bp), blob)
     
     def test_fixed_opaque_with_size_0(self):
-        my_cls = FixedOpaque.typedef('my_cls', 0)
+        my_cls = FixedOpaque(size=0)
         blob = my_cls(())
         self.assertIsInstance(blob, bytearray)
         self.assertIsInstance(blob, my_cls)
@@ -116,8 +116,8 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
         
-    def test_simple_subclassing(self):
-        subcls = FixedOpaque(5)
+    def test_explicit_subclassing(self):
+        subcls = FixedOpaque.typedef(size=5)
         x = subcls(b'12345')
         self.assertIsInstance(x, FixedOpaque)
         self.assertEqual(encode(x), b'12345' + _padding(5))
@@ -226,7 +226,7 @@ class TestVarOpaque(unittest.TestCase):
             blob *= 5
      
     def test_var_opaque_class_construction(self):
-        my_cls = VarOpaque.typedef('my_cls', 9)
+        my_cls = VarOpaque(size=9)
         self.assertTrue(issubclass(my_cls, VarOpaque))
         self.assertTrue(VarOpaque in my_cls.__mro__)
         byte_str = b'\0\xff\xab\xcd\x01'
@@ -284,8 +284,8 @@ class TestVarOpaque(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
          
-    def test_simple_subclassing(self):
-        subcls = VarOpaque(5)
+    def test_explicit_subclassing(self):
+        subcls = VarOpaque.typedef(size=5)
         x = subcls(b'123')
         self.assertIsInstance(x, VarOpaque)
         self.assertEqual(encode(x), encode(Int32u(3)) +  b'123' + _padding(3))
@@ -313,7 +313,7 @@ class TestString(unittest.TestCase):
         self.assertRaises(ValueError, decode, self.MyString, b'\0\0\0\x0fthis is way too long' + _padding(20))
  
     def test_string_class_construction(self):
-        my_cls = String.typedef('my_cls', 15)
+        my_cls = String(size=15)
         self.assertTrue(issubclass(my_cls, String))
         self.assertTrue(String in my_cls.__mro__)
         byte_str = b'Hello world!'
@@ -421,8 +421,8 @@ class TestString(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
-    def test_simple_subclassing(self):
-        subcls = String(5)
+    def test_explicit_subclassing(self):
+        subcls = String.typedef(size=5)
         x = subcls(b'123')
         self.assertIsInstance(x, String)
         self.assertEqual(encode(x), encode(Int32u(3)) + b'123' + _padding(3))

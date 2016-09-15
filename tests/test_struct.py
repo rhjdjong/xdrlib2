@@ -11,8 +11,8 @@ from xdrlib2.xdr_types import _padding
 class TestStructure(unittest.TestCase):
     class SimpleStructure(Structure):
         n = Int32
-        s = String.typedef('s', 5)
-        t = FixedArray.typedef('t', size=5, type=VarOpaque.typedef('x', 3))
+        s = String(size=5)
+        t = FixedArray(size=5, type=VarOpaque(size=3))
     
     def test_simple_struct_by_keywords(self):
         s = self.SimpleStructure(n=3, s=b'hallo', t=(b'abc', b'de', b'f', b'', b'ghi'))
@@ -90,10 +90,9 @@ class TestStructure(unittest.TestCase):
         self.assertEqual(decode(self.SimpleStructure, bp), s)
    
     def test_structure_type_construction(self):
-        c = Structure.typedef('c',
-                              ('n', Int32),
-                              ('s', String(5)),
-                              ('t', FixedArray(5, VarOpaque(3))))
+        c = Structure(('n', Int32),
+                      ('s', String(size=5)),
+                      ('t', FixedArray(size=5, type=VarOpaque(size=3))))
         s = c(n=3, s=b'hallo', t=(b'abc', b'de', b'f', b'', b'ghi'))
         bp = encode(s)
         self.assertEqual(bp, b''.join((encode(Int32(3)),
@@ -146,10 +145,9 @@ class TestStructure(unittest.TestCase):
         self.assertEqual(decode(self.SimpleStructure, bp), s)
            
     def test_optional_struct(self):
-        myStruct = Structure.typedef('myStruct',
-                                     ('n', Int32),
-                                     ('s', String(5)),
-                                     ('t', FixedArray(5, VarOpaque(3))))
+        myStruct = Structure(('n', Int32),
+                             ('s', String(size=5)),
+                             ('t', FixedArray(size=5, type=VarOpaque(size=3))))
   
         optStruct = Optional(myStruct)
         
@@ -183,10 +181,9 @@ class TestStructure(unittest.TestCase):
         self.assertEqual(decode(optStruct, b_no), no)
 
     def test_struct_with_optional_members(self):
-        myStruct = Structure.typedef('myStruct',
-                                     ('n', Optional(Int32)),
-                                     ('s', Optional(String(5))),
-                                     ('t', Optional(FixedArray(5, VarOpaque(3)))))
+        myStruct = Structure(('n', Optional(Int32)),
+                             ('s', Optional(String(size=5))),
+                             ('t', Optional(FixedArray(size=5, type=VarOpaque(size=3)))))
   
        
         a = myStruct(1, b'hallo', (b'a', b'bc', b'def', b'gh', b''))

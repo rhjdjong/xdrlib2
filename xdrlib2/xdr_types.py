@@ -104,6 +104,8 @@ class _MetaXdrObject(type):
     
     
 class XdrObject(metaclass=_MetaXdrObject):
+    _abstract = True
+    
     def __new__(cls, *args, **kwargs):
         cls._check_arguments(*args, **kwargs)
         return super().__new__(cls, *args, **kwargs)
@@ -134,14 +136,13 @@ class XdrObject(metaclass=_MetaXdrObject):
         return {}
 
     @classmethod
-    def typedef(cls, name, *args, **kwargs):
-#         if not isinstance(name, str) or name and not _is_valid_name(name):
-        if not isinstance(name, str) or not name:
-            raise ValueError('Invalid name for derived class: {}'.format(name))
-        return cls.__class__(name, (cls,), cls._make_class_dictionary(*args, **kwargs))
+    def typedef(cls, *args, **kwargs):
+        return cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
     
 
 class Void(XdrObject):
+    _abstract = False
+    
     def __new__(cls, _=None):
         return super().__new__(cls)
     
@@ -204,6 +205,8 @@ def Optional(orig_cls):
 
             
 class Atomic(XdrObject):
+    _abstract = False
+    
     def __new__(cls, value):
         try:
             cls._fmt
@@ -234,6 +237,9 @@ class Atomic(XdrObject):
         tup, source = _unpack(cls._fmt, cls._encoded_size, source)
         return cls(tup[0]), source
 
+    @classmethod
+    def _make_class_dictionary(cls, *args, **kwargs):
+        return {}
 
 
 class Integer(Atomic, int):
@@ -307,10 +313,18 @@ class Enumeration(Int32):
     lowest enumerated value defined for the class.
     Enumeration values are encoded as :class:`Int32` values, and are 4 bytes long.
     '''
-    def __new__(cls, value=None):
-        if not cls._values:
+    _abstract = True
+    
+    def __new__(cls, value=None, **kwargs):
+        if cls._abstract and value is None and kwargs:
+            return cls.typedef(**kwargs)
+            
+        if cls._abstract:
             raise NotImplementedError("Base class '{}' cannot be instantiated, only derived classes "
                                       'with defined enumeration members.'.format(cls.__name__))
+        if kwargs:
+            raise ValueError("Class '{}' cannot be instantiated with keyword arguments".format(cls.__name__))
+        
         if value is None:
             value = min(cls._values)
         return super().__new__(cls, value)
@@ -359,6 +373,9 @@ class Enumeration(Int32):
             raise ValueError("Cannot add new enumeration values to Enumeration subclass '{}'. "
                              "Existing values are '{}'".format(cls.__name__, cls._members))
         
+        # We now have a concrete class
+        cls._abstract = False
+        
         # Store the name and values in the class
         cls._values = set(members.values())  # Bootstrap with Int32 instances
         cls._members = {name: cls(value) for name, value in members.items()}
@@ -376,10 +393,15 @@ class Enumeration(Int32):
         # stack[1] is the frame of the function calling this _prepare function,
         #   i.e. the __init__ of the XdrObject metaclass.
         # stack[2] is the frame where the class is created.
+        method = 'direct'
         for f in stack[2:]:
             # Check if this is the typedef method defined in XdrObject
-            if f.function == 'typedef' and f.frame.f_globals.get('_guard') is _guard:
+            if method == 'direct' and f.function == 'typedef' and f.frame.f_globals.get('_guard') is _guard:
+                method = 'typedef'
                 continue # Try the next frame
+            if method == 'typedef' and f.function == '__new__' and f.frame.f_globals.get('_guard') is _guard:
+                method = '__new__'
+                continue
             global_namespace = f.frame.f_globals
             break
         else:
@@ -584,10 +606,10 @@ class Float128(Float):
         
 
 class Sequence(XdrObject):
+    _abstract = True
+    
     def __new__(cls, data):
-        try:
-            cls._size
-        except AttributeError:
+        if cls._abstract:
             raise NotImplementedError("Cannot instantiate abstract '{}' class"
                                       .format(cls.__name__))
         return super().__new__(cls, data)
@@ -595,6 +617,39 @@ class Sequence(XdrObject):
     def __init__(self, data):
         self._check_size(len(data))
         super().__init__(data)
+    
+    @classmethod
+    def _prepare(cls, dct):
+        if cls._abstract:
+            for attr, value in dct.items():
+                if attr in ('variable', 'size', 'type'):
+                    if hasattr(cls, attr):
+                        delattr(cls, attr)
+                    setattr(cls, '_'+ attr, value)
+            if hasattr(cls, '_variable'):
+                variable = cls._variable
+            else:
+                variable = False
+            if hasattr(cls, '_size'):
+                size = cls._size
+                if size is None:
+                    if variable:
+                        size = Int32u._max
+                    else:
+                        raise ValueError("Unspecified size not allowed for fixed length sequence '{}'"
+                                         .format(cls.__name__))
+                try:
+                    cls._size = Int32u(size)
+                except ValueError:
+                    raise ValueError("Invalid size '{}' for sequence type '{}'"
+                                     .format(size, cls.__name__))
+                cls._abstract = False
+            if hasattr(cls, '_type'):
+                if not issubclass(cls._type, XdrObject):
+                    raise ValueError("Invalid element type '{}' for sequence type '{}'"
+                                     .format(cls._type.__name__, cls.__name__))     
+
+          
 
     @classmethod
     def _check_arguments(cls, value):
@@ -622,6 +677,8 @@ class Sequence(XdrObject):
 
 
 class FixedSequence(Sequence):
+    variable = False
+    
     @classmethod
     def _check_size(cls, size):
         if size != cls._size:
@@ -629,6 +686,8 @@ class FixedSequence(Sequence):
                              .format(size, cls.__name__, cls._size)))
 
 class VarSequence(Sequence):
+    variable = True
+    
     @classmethod
     def _check_size(cls, size):
         if size > cls._size:
@@ -637,16 +696,6 @@ class VarSequence(Sequence):
             
     
 class Opaque(Sequence, bytearray):
-#     def __new__(cls, data):
-#         return super().__new__(cls, data)
-
-    @classmethod
-    def _prepare(cls, dct):
-        for name, value in dct.items():
-            if name in ('size'):
-                delattr(cls, name)
-                setattr(cls, '_'+ name, Int32u(value))
-
     @classmethod
     def _make_class_dictionary(cls, size):
         return {'size': size}
@@ -678,9 +727,18 @@ class Opaque(Sequence, bytearray):
     
 
 class FixedOpaque(FixedSequence, Opaque):
-    def __new__(cls, *args):
-        if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
-            return cls.typedef(cls.__name__+'[{}]'.format(args[0]), size=args[0])
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:
+            if not args and kwargs and 'size' in kwargs:
+                size = kwargs.get('size')
+                name = cls.__name__ + "<[]>".format(size)
+                new_cls = cls.typedef(size)
+                new_cls.__name__ = name
+                return new_cls
+
+        if kwargs and not cls._abstract:
+            raise ValueError("Keyword arguments not allowed when instantiating class '{}'".format(cls.__name__))
+        
         if args in ((), (None,)):
             args = (bytes(cls._size),)
         return super().__new__(cls, *args)
@@ -701,9 +759,21 @@ class FixedOpaque(FixedSequence, Opaque):
         
         
 class _VarOpaque(VarSequence, Opaque):
-    def __new__(cls, *args):
-        if not hasattr(cls, '_size') and len(args) == 1 and isinstance(args[0], numbers.Integral):
-            return cls.typedef(cls.__name__+'<{}>'.format(args[0]), size=args[0])
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:
+            if not args and kwargs and 'size' in kwargs:
+                size = kwargs['size']
+                if size is not None:
+                    name = cls.__name__ + "<{}>".format(size)
+                else:
+                    name = cls.__name__ + "<>"
+                new_cls = cls.typedef(size)
+                new_cls.__name__ = name
+                return new_cls
+
+        if kwargs and not cls._abstract:
+            raise ValueError("Keyword arguments not allowed when instantiating class '{}'".format(cls.__name__))
+        
         if args in ((), (None,)):
             args = ([],)
         return super().__new__(cls, *args)
@@ -736,14 +806,6 @@ class String(_VarOpaque):
 
 
 class Array(Sequence, list):
-    @classmethod
-    def _prepare(cls, dct):
-        for name, value in dct.items():
-            if name in ('size', 'type'):
-                if name == 'size':
-                    value = Int32u(value)
-                delattr(cls, name)
-                setattr(cls, '_'+ name, value)
     
     @classmethod
     def _make_class_dictionary(cls, size, type):
@@ -776,12 +838,19 @@ class Array(Sequence, list):
     
 
 class FixedArray(FixedSequence, Array):
-    def __new__(cls, *args):
-        if not hasattr(cls, '_size') and len(args) == 2:
-            if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
-                return cls.typedef('{}[{}]'.format(args[1].__name__, args[0]), size=args[0], type=args[1])
-            elif issubclass(args[0], XdrObject) and isinstance(args[1], numbers.Integral):
-                return cls.typedef('{}[{}]'.format(args[0].__name__, args[1]), size=args[1], type=args[0])
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:
+            if not args and kwargs and set(('type', 'size')) == set(kwargs.keys()):
+                typ = kwargs['type']
+                size = kwargs['size']
+                name = cls.__name__ + "[{}]".format(size)
+                new_cls = cls.typedef(size=size, type=typ)
+                new_cls.__name__ = name
+                return new_cls
+
+        if kwargs and not cls._abstract:
+            raise ValueError("Keyword arguments not allowed when instantiating class '{}'".format(cls.__name__))
+        
         if args in ((), (None,)):
             args = ([cls._type() for _ in range(cls._size)],)
         return super().__new__(cls, *args)
@@ -809,12 +878,23 @@ class FixedArray(FixedSequence, Array):
 
 
 class VarArray(VarSequence, Array):
-    def __new__(cls, *args):
-        if not hasattr(cls, '_size') and len(args) == 2:
-            if isinstance(args[0], numbers.Integral) and issubclass(args[1], XdrObject):
-                return cls.typedef('{}<{}>'.format(args[1].__name__, args[0]), size=args[0], type=args[1])
-            elif issubclass(args[0], XdrObject) and isinstance(args[1], numbers.Integral):
-                return cls.typedef('{}<{}>'.format(args[0].__name__, args[1]), size=args[1], type=args[0])
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:
+            if not args and kwargs and set(('type', 'size')) >= set(kwargs.keys()) and 'type' in kwargs:
+                typ = kwargs['type']
+                size = kwargs.get('size')
+                if size is not None:
+                    name = cls.__name__ + "<{}>".format(size)
+                else:
+                    name = cls.__name__ + "<>"
+                    size = Int32u._max
+                new_cls = cls.typedef(size=size, type=typ)
+                new_cls.__name__ = name
+                return new_cls
+
+        if kwargs and not cls._abstract:
+            raise ValueError("Keyword arguments not allowed when instantiating class '{}'".format(cls.__name__))
+        
         if args in ((), (None,)):
             args = ([],)
         return super().__new__(cls, *args)
@@ -841,8 +921,17 @@ class VarArray(VarSequence, Array):
 
 
 class Structure(XdrObject):
+    _abstract = True
+    
     def __new__(cls, *args, **kwargs):
-        if not cls._types:
+        if cls._abstract and not kwargs:
+            if all((isinstance(x, collections.abc.Sequence) and
+                    len(x) == 2 and
+                    isinstance(x[0], str) and
+                    issubclass(x[1], XdrObject)) for x in args):
+                return cls.typedef(*args)
+                
+        if cls._abstract:
             raise NotImplementedError("Cannot instantiate abstract '{}' class"
                                       .format(cls.__name__))
         return super().__new__(cls)
@@ -897,6 +986,8 @@ class Structure(XdrObject):
         cls._types = member_types
         for name in member_types:
             delattr(cls, name)
+        
+        cls._abstract = False
      
     @classmethod
     def _make_class_dictionary(cls, *args):
@@ -945,10 +1036,20 @@ class Structure(XdrObject):
 _UnionTuple = namedtuple('_UnionTuple', 'switch case')    
     
 class Union(XdrObject, _UnionTuple):
-    def __new__(cls, variant, *args, **kwargs):
-        if not cls._types:
+    _abstract = True
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract and not args and 'switch' in kwargs and 'case' in kwargs:
+                return cls.typedef(**kwargs)
+                
+        if cls._abstract:
             raise NotImplementedError("Cannot instantiate abstract '{}' class"
                                       .format(cls.__name__))
+        if not args:
+            raise TypeError("Required argument variant missing for instantiation of class '{}'"
+                            .format(cls.__name__))
+        variant = args[0]
+        args = args[1:]  
         switch = cls._types['switch'](variant)
         case_type = cls._case_type(switch)
         value = case_type(*args, **kwargs)
@@ -985,10 +1086,18 @@ class Union(XdrObject, _UnionTuple):
                              .format(discr_type.__name__, cls.__name__))
         types['switch'] = discr_type
         names['switch'] = discr_name
-        
+        if 'default' in dct:
+            data['case']['default'] = dct['default']
+            
         for case_value, case_spec in data['case'].items():
-            if case_value != 'default':
-                case_value = discr_type(case_value)
+            if not isinstance(case_value, (tuple, list)):
+                case_value = (case_value,)
+            if 'default' in case_value:
+                if len(case_value) > 1:
+                    raise ValueError("Default case cannot be combined with other variants")
+            else:
+                case_value = tuple(discr_type(cv) for cv in case_value)
+                
             if case_spec is None:
                 case_type = Void
                 case_name = None
@@ -997,24 +1106,29 @@ class Union(XdrObject, _UnionTuple):
             else:
                 case_name, case_type = case_spec.__name__, case_spec
                 
-            if not issubclass(case_type, XdrObject):
+            if case_type and not issubclass(case_type, XdrObject):
                 raise ValueError("Invalid type '{}' in case specification for Union class '{}', branch '{}'"
                                  .format(case_type.__name__, cls.__name__, case_value))
-            if case_value in types:
-                raise ValueError("Redefinition of case value '{}' for Union class '{}'"
-                                 .format(case_value, cls.__name__))
             if case_name and case_name in names.values():
                 raise ValueError("Duplicate case name '{}' for Union class '{}'"
                                  .format(case_name, cls.__name__))
-            types[case_value] = case_type
-            names[case_value] = case_name
+            for cv in case_value:
+                if cv in types:
+                    raise ValueError("Redefinition of case value '{}' for Union class '{}'"
+                                     .format(cv, cls.__name__))
+            for cv in case_value:
+                types[cv] = case_type
+                names[cv] = case_name
         
         cls._types = types
         cls._names = names
-        cls._values = {name: value for value, name in names.items() if name}
         
         for name in ('switch', 'case'):
             delattr(cls, name)
+        if 'default' in dct:
+            delattr(cls, 'default')
+        
+        cls._abstract = False
             
             
     @classmethod       

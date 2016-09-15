@@ -20,7 +20,7 @@ class TestDerivedEnumeration(unittest.TestCase):
         YELLOW = 3
         BLUE = 5
     
-    FileKind = Enumeration.typedef('FileKind', TEXT=0, DATA=1, EXEC=2)
+    FileKind = Enumeration(TEXT=0, DATA=1, EXEC=2)
     
     def test_names_are_in_global_namespace(self):
         self.assertEqual(TEXT, 0) # @UndefinedVariable
@@ -69,10 +69,10 @@ class TestDerivedEnumeration(unittest.TestCase):
         self.assertRaises(ValueError, decode, self.FileKind, encode(Int32(0x07ffffff)))
     
     def test_existing_enumerations_cannot_be_extended(self):
-        self.assertRaises(ValueError, self.MyEnum.typedef, 'OtherEnum', GREEN=8)
+        self.assertRaises(ValueError, self.MyEnum.typedef, GREEN=8)
 
     def test_existing_enumerations_can_be_aliased(self):
-        alias = self.MyEnum.typedef('alias')
+        alias = self.MyEnum.typedef()
         self.assertIs(alias.RED, self.MyEnum.RED)
 
         

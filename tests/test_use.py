@@ -66,7 +66,7 @@ class TestParser(unittest.TestCase):
         new_parser_mtime = self.fs.getinfo(parser_path)['modified_time']
         self.assertLess(new_parser_mtime, parser_mtime)
         start_time = datetime.datetime.now()
-        self.assertLess(new_parser_mtime, start_time - datetime.timedelta(hours=1))
+        self.assertLessEqual(new_parser_mtime, start_time - datetime.timedelta(hours=1))
         xdrlib2.use('example', fs=self.fs)
         finish_time = datetime.datetime.now()
         generated_time = self.fs.getinfo(parser_path)['modified_time']

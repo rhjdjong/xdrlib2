@@ -13,14 +13,13 @@ class TestUnion(unittest.TestCase):
         switch = ('discr', Int32)
         case = {1: None,
                 2: ('flag', Boolean),
-                3: String.typedef('name', 10),
-                4: ('foo', Int32u.typedef('bar')),
-                'default': ('whatever', FixedOpaque.typedef('x', 4)),
+                3: String(size=10),
+                4: ('foo', Int32u),
+                'default': ('whatever', FixedOpaque(size=4)),
                 }
        
-    SimpleUnionFromEnum = Union.typedef('SimpleUnionFromEnum',
-                                        switch=('discr', Enumeration.typedef('discr', a=1, b=2, c=3)),
-                                        case={1: None, 2: ('number', Int32), 3: ('logic', Boolean)})
+    SimpleUnionFromEnum = Union(switch=('discr', Enumeration(a=1, b=2, c=3)),
+                                case={1: None, 2: ('number', Int32), 3: ('logic', Boolean)})
        
     def test_simple_union_invalid_initialization(self):
         self.assertRaises(ValueError, self.SimpleUnion, 18, b'random value')
@@ -32,12 +31,11 @@ class TestUnion(unittest.TestCase):
 #                               switch=('discr', Int32),
 #                               case={1: ('a', Boolean), 2: ('b', Float32), 1: ('c', Int64)})
         with self.assertRaises(ValueError):
-            x = Union.typedef('RedefinedCAseName',
-                              switch=('discr', Int32),
-                              case={1: ('a', Boolean), 2: ('a', Float32), 'default': ('c', Int64)})
+            x = Union(switch=('discr', Int32),
+                      case={1: ('a', Boolean), 2: ('a', Float32)},
+                      default=('c', Int64))
         with self.assertRaises(ValueError):
-            x = Union.typedef('CaseNameMatchesSwitchName',
-                              switch=('a', Int32),
+            x = Union.typedef(switch=('a', Int32),
                               case={1: ('a', Boolean), 2: ('b', Float32)})
             
     def test_simple_union_from_enum(self):

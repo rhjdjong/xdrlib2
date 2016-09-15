@@ -15,7 +15,7 @@ class TestFixedArray(unittest.TestCase):
     
     class StringArray(FixedArray):
         size = 3
-        type = String.typedef('MyString', 7)
+        type = String(size=7)
         
     def test_default_instantiation(self):
         x = self.IntArray()
@@ -73,7 +73,7 @@ class TestFixedArray(unittest.TestCase):
         self.assertRaises(ValueError, self.StringArray, (1, 2, 3))
 
     def test_fixed_array_class_construction(self):
-        my_cls = FixedArray.typedef('my_cls', size=5, type=Boolean)
+        my_cls = FixedArray(size=5, type=Boolean)
         self.assertTrue(issubclass(my_cls, FixedArray))
         self.assertTrue(FixedArray in my_cls.__mro__)
         arg_list = [False, True, True, False, True]
@@ -86,7 +86,7 @@ class TestFixedArray(unittest.TestCase):
         self.assertEqual(decode(my_cls, x_bytes), x)
 
     def test_fixed_array_with_size_0(self):
-        my_cls = FixedArray.typedef('my_cls', size=0, type=Int32)
+        my_cls = FixedArray(size=0, type=Int32)
         x = my_cls(())
         self.assertIsInstance(x, my_cls)
         self.assertSequenceEqual(x, [])
@@ -134,8 +134,8 @@ class TestFixedArray(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
-    def test_simple_subclassing(self):
-        subcls = FixedArray(Int32, 5)
+    def test_explicit_subclassing(self):
+        subcls = FixedArray.typedef(type=Int32, size=5)
         self.assertTrue(issubclass(subcls, FixedArray))
         x = subcls((1, 2, 3, 4, 5))
         self.assertIsInstance(x, FixedArray)
@@ -148,7 +148,7 @@ class TestVarArray(unittest.TestCase):
     
     class StringArray(VarArray):
         size = 3
-        type = String.typedef('MyString', 7)
+        type = String(size=7)
         
     def test_default_instantiation(self):
         x = self.IntArray()
@@ -201,7 +201,7 @@ class TestVarArray(unittest.TestCase):
         self.assertRaises(ValueError, self.StringArray, (1, 2, 3))
 
     def test_var_array_class_construction(self):
-        my_cls = VarArray.typedef('my_cls', size=5, type=Boolean)
+        my_cls = VarArray(size=5, type=Boolean)
         self.assertTrue(issubclass(my_cls, VarArray))
         self.assertTrue(VarArray in my_cls.__mro__)
         arg_list = [False, True]
@@ -214,7 +214,7 @@ class TestVarArray(unittest.TestCase):
         self.assertEqual(decode(my_cls, x_bytes), x)
 
     def test_var_array_with_size_0(self):
-        my_cls = VarArray.typedef('my_cls', size=0, type=Int32)
+        my_cls = VarArray(size=0, type=Int32)
         x = my_cls(())
         self.assertIsInstance(x, my_cls)
         self.assertSequenceEqual(x, [])
@@ -289,8 +289,8 @@ class TestVarArray(unittest.TestCase):
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
 
-    def test_simple_subclassing(self):
-        subcls = VarArray(Int32, 5)
+    def test_explicit_subclassing(self):
+        subcls = VarArray.typedef(type=Int32, size=5)
         self.assertTrue(issubclass(subcls, VarArray))
         x = subcls((1, 2, 3))
         self.assertIsInstance(x, VarArray)
