@@ -69,8 +69,8 @@ struct struct_with_multiple_simple_elements {
 };
 
 struct struct_with_unusual_but_legal_void_element {
-	fixed_array_of_bool a;
-	var_array_of_float b;
+	bool_fixed_array a;
+	float_var_array b;
 	void;
 };
 
@@ -81,14 +81,14 @@ union union_with_single_simple_variant_without_default switch (int a) {
 
 union union_with_multiple_variants_without_default switch (unsigned int a) {
 	case 1:
-		fixed_array_of_float f;
+		float_fixed_array f;
 	case TEN:
 		double d;
 };
 
 union union_definition_of_optional_structure switch (bool c) {
 	case TRUE:
-		struct_with_multiple_elements s;
+		struct_with_multiple_simple_elements s;
 	default:
 		void;
 };
@@ -119,14 +119,14 @@ struct very_complex_struct {
 		case 3:
 			union switch (bool b) {
 				case FALSE:
-					struct_with_multiple_elements b_false;
+					struct_with_multiple_simple_elements b_false;
 				case TRUE:
 					union_with_multiple_variants_without_default b_true[5];
 			} union_var;
 		case 4:
 			enum {H=8, K=10} enum_var;
 		case 5:
-			case_type x;
+			opt_int_list x;
 		default:
 			void;
 	} first_element;

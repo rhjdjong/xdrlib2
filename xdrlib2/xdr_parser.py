@@ -117,56 +117,10 @@ class XdrYacc:
         self.parser = yacc.yacc(module=self, **kwargs)
         self.lexer = XdrLex().lexer
         
-#         self.globals = {
-#             'bool': 'type',
-#             'double': 'type',
-#             'quadruple': 'type',
-#             'enum': 'type',
-#             'float': 'type',
-#             'hyper': 'type',
-#             'int': 'type',
-#             'opaque': 'type',
-#             'string': 'type',
-#             'struct': 'type',
-#             'union': 'type',
-#             'unsigned int': 'type',
-#             'unsigned hyper': 'type',
-#             'void': 'type',
-#             'TRUE': 'value',
-#             'FALSE': 'value',
-#             }
-#         self.scopes = [self.globals]
-        
     def parse(self, text, **kwargs):
         # Use the Xdr lexer
         kwargs['lexer'] = self.lexer
         return self.parser.parse(text, **kwargs)
-    
-#     def push_scope(self):
-#         self.scopes.append({})
-#     
-#     def pop_scope(self):
-#         self.scopes.pop()
-#     
-#     def new_name(self, name, use, lineno):
-#         scope = self.scopes[-1]
-#         if name in scope:
-#             raise XdrSyntaxError("Duplicate name '{}' on line {}"
-#                                  .format(name, lineno))
-#         scope[name] = use
-#     
-#     def use_name(self, name, use, lineno):
-#         for scope in self.scopes:
-#             if name in scope:
-#                 if scope[name] != use:
-#                     raise XdrSyntaxError("Line {}: name '{}' is a {}. Expected a {}"
-#                                          .format(lineno, name, scope[name], use))
-#                 break
-#         else:
-#             raise XdrSyntaxError("Name '{}' on line {} used but not defined"
-#                                  .format(name, lineno))
-            
-    
     
     def get_source(self, p):
         start = p.lexpos(1)
@@ -176,11 +130,11 @@ class XdrYacc:
                                                                        
     def p_specification(self, p):
         '''specification : definition_list'''
-        p[0] = Ast_Specification(p[1], None, lineno=p.lineno(1))
+        p[0] = Ast_Specification(None, p[1], lineno=p.lineno(1))
     
     def p_specification_empty(self, p):
         '''specification : empty'''
-        p[0] = Ast_Specification([], None, lineno=p.lineno(1))
+        p[0] = Ast_Specification(None, [], lineno=p.lineno(1))
     
     def p_definition_list_single(self, p):
         '''definition_list : definition'''
@@ -192,68 +146,69 @@ class XdrYacc:
     
     def p_definition_typedef(self, p):
         '''definition : TYPEDEF declaration ";"'''
-        decl = p[2]
-        decl.__type__ = Ast_DeclarationTypeDef
-        p[0] = Ast_Definition(decl, None, src=self.get_source(p), lineno=p.lineno(3))
+        name = p[2].name
+        p[0] = Ast_Definition(name, p[2], src=self.get_source(p), lineno=p.lineno(3))
     
     def p_defintion_structured(self, p):
         '''definition : ENUM IDENTIFIER enum_body ";"
                       | STRUCT IDENTIFIER struct_body ";"
                       | UNION IDENTIFIER union_body ";"'''
+        spec = p[3]
+        spec.name = Ast_Ref(p[1], lineno=p.lineno(1))
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        spec = Ast_TypeSpec(p[3], Ast_Name(p[1], lineno=p.lineno(1)), lineno=p.lineno(3))
-        p[0] = Ast_Definition(spec, name, src=self.get_source(p), lineno=p.lineno(4))
+        decl = Ast_Declaration(name, spec, lineno=p.lineno(3))
+        p[0] = Ast_Definition(name, decl, src=self.get_source(p), lineno=p.lineno(4))
     
     def p_definition_constant(self, p):
         '''definition : CONST IDENTIFIER "=" constant ";"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Constant(p[4], name, src=self.get_source(p), lineno=p.lineno(5))
+        p[0] = Ast_Constant(name, p[4], src=self.get_source(p), lineno=p.lineno(5))
     
     def p_declaration_scalar(self, p):
         '''declaration : type_specification IDENTIFIER'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, lineno=p.lineno(2))
+        p[0] = Ast_Declaration(name, p[1], lineno=p.lineno(2))
     
     def p_declaration_array_fixed(self, p):
         '''declaration : type_specification IDENTIFIER "[" value "]"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, size=p[4], array=True, var=False, lineno=p.lineno(5))
+        p[0] = Ast_Declaration(name, p[1], size=p[4], array=True, var=False, lineno=p.lineno(5))
     
     def p_declaration_array_var(self, p):
         '''declaration : type_specification IDENTIFIER "<" opt_value ">"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, size=p[4], array=True, var=True, lineno=p.lineno(5))
+        p[0] = Ast_Declaration(name, p[1], size=p[4], array=True, var=True, lineno=p.lineno(5))
     
     def p_declaration_opaque_fixed(self, p):
         '''declaration : OPAQUE IDENTIFIER "[" value "]"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, size=p[4], array=True, var=False, lineno=p.lineno(5))
+        p[0] = Ast_Declaration(name, Ast_Ref(p[1], lineno=p.lineno(1)), size=p[4], array=True, var=False, lineno=p.lineno(5))
     
     def p_declaration_opaque_var(self, p):
         '''declaration : OPAQUE IDENTIFIER "<" opt_value ">"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, size=p[4], array=True, var=True, lineno=p.lineno(5))
+        p[0] = Ast_Declaration(name, Ast_Ref(p[1], lineno=p.lineno(1)), size=p[4], array=True, var=True, lineno=p.lineno(5))
     
     def p_declaration_string(self, p):
         '''declaration : STRING IDENTIFIER "<" opt_value ">"'''
         name = Ast_Name(p[2], lineno=p.lineno(2))
-        p[0] = Ast_Declaration(p[1], name, size= p[4], array=True, var=True, lineno=p.lineno(5))
+        p[0] = Ast_Declaration(name, Ast_Ref(p[1], lineno=p.lineno(1)), size= p[4], array=True, var=True, lineno=p.lineno(5))
     
     def p_declaration_optional(self, p):
         '''declaration : type_specification "*" IDENTIFIER'''
         name = Ast_Name(p[3], lineno=p.lineno(3))
-        p[0] = Ast_Declaration(p[1], name, optional=True, lineno=p.lineno(3))
+        p[0] = Ast_Declaration(name, p[1], optional=True, lineno=p.lineno(3))
     
     def p_declaration_void(self, p):
         '''declaration : VOID'''
-        name = Ast_Name(None, lineno=p.lineno(1))
-        p[0] = Ast_Declaration(None, name, lineno=p.lineno(1))
+        p[0] = Ast_Declaration(None, None, lineno=p.lineno(1))
     
     def p_type_specification_unsigned(self, p):
         '''type_specification : UNSIGNED INT
                               | UNSIGNED HYPER'''
-        name = Ast_Name(' '.join((p[1], p[2])), lineno=p.lineno(2))
-        p[0] = Ast_TypeSpec(None, name, lineno=p.lineno(2))
+        uname = ' '.join((p[1], p[2]))
+        name = Ast_Ref(uname, lineno=p.lineno(2))
+        p[0] = Ast_TypeSpec(name, None, lineno=p.lineno(2))
     
     def p_type_specification_simple(self, p):
         '''type_specification : INT
@@ -263,19 +218,27 @@ class XdrYacc:
                               | QUADRUPLE
                               | BOOL
                               | IDENTIFIER'''
-        name = Ast_Name(p[1], lineno=p.lineno(1))
-        p[0] = Ast_TypeSpec(None, name, lineno=p.lineno(2))
+        name = Ast_Ref(p[1], lineno=p.lineno(1))
+        p[0] = Ast_TypeSpec(name, None, lineno=p.lineno(1))
     
-    def p_type_specification_strucutured(self, p):
-        '''type_specification : ENUM enum_body
-                              | STRUCT struct_body
-                              | UNION union_body'''
-        name = Ast_Name(p[1], lineno=p.lineno(1))
-        p[0] = Ast_TypeSpec(p[2], name, lineno=p.lineno(2))
+    def p_type_specification_enum(self, p):
+        '''type_specification : ENUM enum_body'''
+        p[0] = p[2]
+        p[0].name = Ast_Ref(p[1], lineno=p.lineno(1))
     
+    def p_type_specification_struct(self, p):
+        '''type_specification : STRUCT struct_body'''
+        p[0] = p[2]
+        p[0].name = Ast_Ref(p[1], lineno=p.lineno(1))
+
+    def p_type_specification_union(self, p):
+        '''type_specification : UNION union_body'''
+        p[0] = p[2]
+        p[0].name = Ast_Ref(p[1], lineno=p.lineno(1))
+
     def p_enum_body(self, p):
         '''enum_body : "{" enum_const_list "}"'''
-        p[0] = p[2]
+        p[0] = Ast_EnumBody(None, p[2], lineno=p.lineno(3))
     
     def p_enum_const_list_single(self, p):
         '''enum_const_list : enum_element'''
@@ -288,15 +251,15 @@ class XdrYacc:
     def p_enum_element(self, p):
         '''enum_element : IDENTIFIER "=" value'''
         name = Ast_Name(p[1], lineno=p.lineno(1))
-        p[0] = Ast_EnumDef(p[3], p[1], lineno=p.lineno(1))
+        p[0] = (name, p[3])
     
     def p_struct_body(self, p):
         '''struct_body : "{" declaration_list "}"'''
-        p[0] = p[2]
+        p[0] = Ast_StructBody(None, p[2], lineno=p.lineno(3))
     
     def p_declaration_list_single(self, p):
         '''declaration_list : declaration ";"'''
-        p[0] = [p[2]]
+        p[0] = [p[1]]
     
     def p_declaration_list_multi(self, p):
         '''declaration_list : declaration_list declaration ";"'''
@@ -304,15 +267,15 @@ class XdrYacc:
     
     def p_union_body(self, p):
         '''union_body : SWITCH "(" declaration ")" "{" case_list opt_default "}"'''
-        p[0] = [p[3], p[6], p[7]]
+        p[0] = Ast_UnionBody(None, [p[3], p[6], p[7]], lineno=p.lineno(8))
     
     def p_case_list_single(self, p):
         '''case_list : case_spec'''
-        p[0] = p[1]
+        p[0] = [p[1]]
     
     def p_case_list_multi(self, p):
         '''case_list : case_list case_spec'''
-        p[0] = p[1] + p[2]
+        p[0] = p[1] + [p[2]]
         
     def p_case_spec(self, p):
         '''case_spec : case_value_list declaration ";"'''
@@ -344,7 +307,7 @@ class XdrYacc:
     
     def p_value_identifier(self, p):
         '''value : IDENTIFIER'''
-        p[0] = Ast_Name(p[1], lineno=p.lineno(1))
+        p[0] = Ast_Ref(p[1], lineno=p.lineno(1))
         
     def p_opt_value_empty(self, p):
         '''opt_value : empty'''
@@ -356,15 +319,18 @@ class XdrYacc:
     
     def p_constant_decimal(self, p):
         '''constant : DECIMAL'''
-        p[0] = p[1]
+        p[0] = Ast_Value(p[1], base=10, lineno=p.lineno(1))
     
     def p_constant_hexadecimal(self, p):
         '''constant : HEXADECIMAL'''
-        p[0] = p[1]
+        p[0] = Ast_Value(p[1], base=16, lineno=p.lineno(1))
     
     def p_constant_octal(self, p):
         '''constant : OCTAL'''
-        p[0] = '0o'+p[1].lstrip('0')
+        if p[1] == '0':
+            p[0] = Ast_Value('0', base=10, lineno=p.lineno(1))
+        else:
+            p[0] = Ast_Value('0o'+p[1].lstrip('0'), base=8, lineno=p.lineno(1))
     
     def p_empty(self, p):
         'empty :'
@@ -379,23 +345,6 @@ class XdrYacc:
 
     
 class AstNode:
-    xdr_globals = {'unsigned int': 'type',
-                   'unsigned hyper': 'type',
-                   'int': 'type',
-                   'hyper': 'type',
-                   'float': 'type',
-                   'double': 'type',
-                   'quadruple': 'type',
-                   'enum': 'type',
-                   'struct': 'type',
-                   'union': 'type',
-                   'opaque': 'type',
-                   'string': 'type',
-                   'bool': 'type',
-                   'TRUE': 'value',
-                   'FALSE': 'value',
-                   }
-    
     typemap = {
         'unsigned int': 'xdr.Int32u',
         'unsigned hyper': 'xdr.Int64u',
@@ -409,14 +358,17 @@ class AstNode:
         'enum': 'xdr.Enumeration',
         'struct': 'xdr.Structure',
         'union': 'xdr.Union',
+        'void': 'xdr.Void',
         }
     
             
-    def __init__(self, contents=None, name=None, **kwargs):
-        self.contents = contents
+    def __init__(self, name=None, contents=None, **kwargs):
         self.name = name
-        for n, v in kwargs:
+        self.contents = contents
+        for n, v in kwargs.items():
             setattr(self, n, v)
+        self.imported_names = []
+        self.exported_names = []
         
     @staticmethod
     def commentify(txt):
@@ -426,63 +378,78 @@ class AstNode:
     def indent(txt, step=4):
         return '\n'.join((' '*step + line) for line in txt.split('\n'))
     
+    @staticmethod
+    def check_redefinition(name, context):
+        if str(name) in context['types'] or str(name) in context['constants']:
+            raise XdrSyntaxError("Line {}: redefinition of name '{}'"
+                                 .format(name.lineno, str(name)))
     
-
+    @staticmethod
+    def get_constant_value(name, context):
+        if isinstance(name, Ast_Ref):
+            v = context['constants'].get(str(name))
+            if v is None:
+                raise XdrSyntaxError("Line {}: constant value '{}' has not been defined"
+                                     .format(name.lineno, str(name)))
+        else:
+            v = int(name)
+        return v
+    
+    
 class Ast_Specification(AstNode):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        spec_globals = {}
-        for definition in self.contents:
-            for name, typ in definition.exported_names:
-                if name in spec_globals:
-                    raise XdrSyntaxError("Line {}: duplicate name '{}'"
-                                         .format(name.lineno, name))
-                spec_globals[str(name)] = typ
-        
-        for definition in self.contents:
-            for name, expected_type in definition.imported_names:
-                actual_type = spec_globals.get(name)
-                if not actual_type:
-                    actual_type = self.xdr_globals.get(name)
-                if not actual_type:
-                    raise XdrSyntaxError("Line {}: referenced name '{:s}' is not defined"
-                                         .format(name.lineno, name))
-                if actual_type != expected_type:
-                    raise XdrSyntaxError("Line {}: referenced name '{}' is a {}, expected a {}"
-                                         .format(name.lineno, name, actual_type, expected_type))
                    
-    def __str__(self):
+    def block(self):
         return '\n\n'.join(d.block() for d in self.contents)
 
+    def validate(self):
+        context = {'constants': {'FALSE': 0,
+                                 'TRUE': 1
+                                 },
+                   'types': {'unsigned int': 'unsigned int',
+                             'unsigned hyper': 'unsigned hyper',
+                             'int': 'int',
+                             'hyper': 'hyper',
+                             'bool': 'bool',
+                             'float': 'float',
+                             'double': 'double',
+                             'quadruple': 'quadruple',
+                             'string': 'string',
+                             'opaque': 'opaque',
+                             'enum': Ast_EnumBody('enum', []),
+                             'struct': Ast_StructBody('struct', []),
+                             'union': Ast_UnionBody('union', [None, [], None]),
+                             },
+                  }
+        for d in self.contents:
+            d.validate(context)
 
 class Ast_Definition(AstNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.exported_names = self.contents.exported_names[:]
-        if self.name:
-            self.exported_names.append((self.name, 'type'))
-        self.imported_names = self.contents.imported_names[:]
-        
     def block(self):
-        txt = []
+        txt = ['']
         if self.src:
             txt.append(self.commentify(self.src))
         txt.append(self.contents.block())
         return '\n'.join(txt)
+    
+    def validate(self, context):
+        self.check_redefinition(self.contents.name, context)
+        context['types'][str(self.contents.name)] = self.contents
+        self.contents.validate(context)
 
 
 class Ast_Constant(AstNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.exported_names = [(self.name, 'value')]
-        self.imported_names = []
-        
     def block(self):
-        txt = []
+        txt = ['']
         if self.src:
             txt.append(self.commentify(self.src))
-        txt.append("{:s} = {:s}".format(self.name, self.contents))
+        txt.append("{} = {}".format(str(self.name), str(self.contents)))
         return '\n'.join(txt)
+    
+    def validate(self, context):
+        self.check_redefinition(self.name, context)
+        context['constants'][str(self.name)] = int(self.contents)
 
 
 class Ast_Declaration(AstNode):
@@ -491,199 +458,214 @@ class Ast_Declaration(AstNode):
         self.var = None
         self.size = None
         super().__init__(*args, **kwargs)
-        
-        self.exported_names.extend(self.contents.exported_names)
-        self.imported_names = self.contents.imported_names[:]
 
-    def inline(self):
-        txt = []
-        if self.var is not None:
-            txt.append("{:s}(".format(self.contents.basetype()))
-            txt.append("size={:s}".format(self.size))
-            if self.contents.name not in ('string', 'opaque'):
-                txt.append(", type={:s}".format(self.typemap(self.contents.name)))
-            txt.append(")")
-            txt = ''.join(txt)
-        else:
-            if self.contents.name in ('enum', 'struct', 'union'):
-                txt.append("{:s}(".format(self.contents.basetype))
-                txt.append(self.indent(self.contents.inline()))
-                txt.append(")")
-            else: 
-                txt.append(self.contents.basetype)
-            txt = '\n'.join(txt)
-        if self.optional:
-            txt="xdr.Optional({:s})".format(txt)
-        return self.name, txt
-                
-    
-class Ast_DeclarationTypeDef(Ast_Declaration):
-    def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
-        if self.name:
-            self.exported_names.append((self.name, 'type'))
-        
-    def block(self):
-        txt = []
-        if self.optional:
-            txt.append("@Optional")
-        txt.append("class {:s}({:s}):".format(self.name, self.contents.basetype()))
-        txt.append(self.indent(self.contents.block()))
-        return '\n'.join(txt)
-    
-    def inline(self):
-        return "{:s} = {:s}".format(super().inline())
-        
-
-class Ast_TypeSpec(AstNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.exported_names = []
-        if self.name:
-            self.imported_names = [(self.name, 'type')]
-        else:
-            self.imported_names = []
-        
-        if self.name == 'enum':
-            for enum_def in self.contents:
-                self.exported_names.extend(enum_def.exported_names)
-                self.imported_names.extend(enum_def.imported_names)
-        elif self.name == 'struct':
-            members = set()
-            for decl in self.contents:
-                if decl.name:
-                    if decl.name in members:
-                        raise XdrSyntaxError("Line {}: duplicate struct member name '{}'"
-                                             .format(decl.name.lineno, decl.name))
-                    members.add(str(decl.name))
-                self.exported_names.extend(decl.exported_names)
-                self.imported_names.extend(decl.imported_names)
-        elif self.name == 'union':
-            switch, case_list, default = self.contents
-            if not switch.name:
-                raise XdrSyntaxError("Line {}: union discriminator must have an integral type"
-                                     .format(switch.leaf.lineno))
-            members = set(switch.name)
-            self.exported_names.extend(switch.contents.exported_names)
-            self.imported_names.extend(switch.contents.imported_names)
-            for case_values, case_decl in case_list:
-                if case_decl.name and case_decl.name in members:
-                    raise XdrSyntaxError("Line {}: duplicate union member name '{}'"
-                                         .format(case_decl.name.lineno, case_decl.name))
-                members.add(case_decl.name)
-                self.exported_names.extend(case_decl.contents.exported_names)
-                self.imported_names.extend(case_decl.contents.imported_names)
-                for cv in case_values:
-                    if isinstance(cv, Ast_Name):
-                        self.imported_names.append(cv, 'value')
-            if default:
-                if default.name:
-                    if default.name in members:
-                        raise XdrSyntaxError("Line {}: duplicate union member name '{}'"
-                                             .format(default.name.lineno, default.name))
-                    members.add(default.name)
-                self.exported_names.extend(default.contents.exported_names)
-                self.imported_names.extend(default.contents.imported_names)
-        else:
-            pass
-            
-    def basetype(self):
-        if self.name == 'string':
+    def basetype(self, name):
+        if name == 'string':
             base = 'xdr.String'
         elif self.var is not None:
             if self.var:
                 base = 'xdr.Var'
             else:
                 base = 'xdr.Fixed'
-            if self.name == 'opaque':
+            if name == 'opaque':
                 base += 'Opaque'
             else:
                 base += 'Array'
         else:
-            base = self.typemap.get(self.name)
+            base = self.typemap.get(str(name), name)
         return base
-                
-    
-    def block(self):
-        txt = []
-        if self.name == 'enum':
-            for e_def in self.contents:
-                txt.append(e_def.block())
-        elif self.name == 'struct':
-            for decl in self.contents:
-                txt.append("{:s} = {:s}".format(decl.inline()))
-        elif self.name == 'union':
-            switch, cases, default = self.contents
-            txt.append("switch = ({:s}, {:s})".format(switch.inline()))
-            txt.append("case = {")
-            for cv, decl in cases:
-                if len(cv) == 1:
-                    txt.append(self.indent("{:s}:".format(cv)))
-                else:
-                    txt.append(self.indent("({:s}):".format(',\n '.join(str(c) for c in cv))))
-                txt.append(self.indent(self.indent("({:s}, {:s}),"
-                                                   .format(decl.inline()))))
-            txt.append("}")
-            if default:
-                txt.append("default = ({:s}, {:s})".format(default.inline()))
-        else:
-            txt.append("pass")
-        return "\n".join(txt)
-
-    def inline(self):
-        txt = []
-        basetype = self.basetype()
-        if self.var is not None:
-            txt.append("{:s}(".format(basetype))
-            txt.append(self.indent("size={:s}".format(self.size)))
-            if self.name not in ('string', 'opaque'):
-                txt.append(self.indent())
-            if self.contents is None:
-                return basetype
-        else:
-            if self.name == 'enum':
-                pass
-            elif self.name == 'struct':
-                pass
-            elif self.name == 'union':
-                pass
-            else:
-                if self.optional:
-                    msg = "Optional({:s})".format(self.name)
-                else:
-                    msg = "{:s}".format(self.name)
-                txt.append("{:s}".format(basetype))
-        txt = '\n'.join(txt)
-        if self.optional:
-            txt = "Optional({:s})".format(txt)
-        return txt
-                
-                
-            
-class Ast_EnumDef(AstNode):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.exported_names = [(self.name, 'value')]
-        if isinstance(self.contents, Ast_Name):
-            self.imported_names = [(self.contents, 'value')]
-        else:
-            self.imported_names = []
-            
-    def block(self):
-        return "{:s} = {:s}".format(self.name, self.contents)
-    
-    def inline(self):
-        return "{:s}={:s}".format(self.name, self.contents)
-    
-    
-class Ast_Name(str):
-    def __new__(cls, txt, lineno=None):
-        obj = super().__new__(cls, txt)
-        obj.lineno = lineno
-        return obj
-
         
+    def block(self):
+        txt = ['']
+        if self.contents is not None:
+            if self.optional:
+                txt.append("@Optional")
+            name = str(self.contents.name)
+            txt.append("class {}({}):".format(str(self.name), self.basetype(name)))
+            if self.var is not None:
+                txt.append(self.indent("size = {}".format(self.size)))
+                if name not in ('string', 'opaque'):
+                    txt.append(self.indent("type = {}".format(self.contents.inline())))
+            else:
+                if name in ('enum', 'struct', 'union'):
+                    txt.append(self.indent(self.contents.block()))
+                else: 
+                    txt.append(self.indent("pass"))
+            return '\n'.join(txt)
+        else:
+            return ''
+    
+    def inline(self):
+        txt = []
+        if self.contents is None:
+            return ('None', 'None')
+        name = str(self.contents.name)
+        if self.var is not None:
+            txt.append("{}(".format(self.basetype(name)))
+            txt.append("size={}".format(self.size))
+            if name not in ('string', 'opaque'):
+                txt.append(", type={}".format(self.typemap.get(name, name)))
+            txt.append(")")
+            txt = ''.join(txt)
+        else:
+            if name in ('enum', 'struct', 'union'):
+                txt.append("{}(".format(self.typemap.get(name, name)))
+                txt.append(self.indent(self.contents.inline()))
+                txt.append(")")
+            else: 
+                txt.append(self.typemap.get(name, name))
+            txt = '\n'.join(txt)
+        if self.optional:
+            txt="xdr.Optional({})".format(txt)
+        return str(self.name), txt
+    
+    def validate(self, context):
+        if self.size is not None:
+            value = self.get_constant_value(self.size, context)
+            if not 0 <= value < 2**32:
+                raise XdrSyntaxError("Line {}: invalid array size: '{}' ({})"
+                                     .format(self.size.lineno, str(self.size), value))
+        if self.contents:
+            if isinstance(self.contents, Ast_Ref):
+                name = str(self.contents)
+                if name not in context['types']:
+                    raise XdrSyntaxError("Line {}: type named '{}' used before it has been defined"
+                                         .format(self.contents.lineno, name))
+            else:
+                self.contents.validate(context)
+                
+        
+class Ast_TypeSpec(AstNode):
+    def block(self):
+        return "pass"
+
+    def inline(self):
+        name = str(self.name)
+        return self.typemap.get(name, name)
+    
+    def validate(self, context):
+        if not str(self.name) in context['types']:
+            raise XdrSyntaxError("Line {}: type '{}' used before it is defined."
+                                 .format(self.name.lineno, str(self.name)))
+
+
+class Ast_EnumBody(Ast_TypeSpec):
+    def _body_to_str(self):
+        return ("{} = {}".format(str(n), str(v)) for n, v in self.contents)
+    
+    def block(self):
+        return '\n'.join(self._body_to_str())
+
+    def inline(self):
+        return ',\n'.join(self._body_to_str())
+
+    def validate(self, context):
+        super().validate(context)
+        for n, v in self.contents:
+            self.check_redefinition(n, context)
+            value = self.get_constant_value(v, context)
+            context['constants'][str(n)] = value
             
+class Ast_StructBody(Ast_TypeSpec):
+    def _body_to_str(self):
+        return ("{} = {}".format(*decl.inline())
+                for decl in self.contents if decl is not None)
+    
+    def block(self):
+        return '\n'.join(self._body_to_str())
+
+    def inline(self):
+        return ',\n'.join(self._body_to_str())
+
+    def validate(self, context):
+        super().validate(context)
+        attributes = set()
+        for decl in self.contents:
+            attr = decl.name
+            if attr is not None:
+                if str(attr) in attributes:
+                    raise XdrSyntaxError("Line {}: redefinition of struct member '{}'"
+                                         .format(attr.lineno, str(attr)))
+                attributes.add(str(attr))
+            decl.validate(context)
+
+class Ast_UnionBody(Ast_TypeSpec):
+    def _body_to_str(self):
+        txt = []
+        switch, cases, default = self.contents
+        txt.append("switch = ({}, {})".format(*switch.inline()))
+        
+        c_list = []
+        for cvl, decl in cases:
+            if len(cvl) == 1:
+                cv_str = str(cvl[0])
+            else:
+                cv_str = "(" + ', '.join(str(c) for c in cvl) + ")"
+            d_name, d_typ = decl.inline()
+            c_list.append("{}: ({}, {})".format(cv_str, d_name, d_typ))
+        txt.append('case = {\n' + self.indent(',\n'.join(c_list)) + '\n}')
+        
+        if default:
+            txt.append("default = ({}, {})".format(*default.inline()))
+        return txt
+    
+    def block(self):
+        return "\n".join(self._body_to_str())
+
+    def inline(self):
+        return ",\n".join(self._body_to_str())
+
+    def validate(self, context):
+        super().validate(context)
+        switch, cases, default = self.contents
+        attributes = set()
+        case_values = set()
+        attributes.add(str(switch.name))
+        switch.validate(context)
+        for cv_list, decl in cases:
+            for case in cv_list:
+                value = self.get_constant_value(case, context)
+                case_values.add(value)
+            attr = decl.name
+            if attr:
+                if str(attr) in attributes:
+                    raise XdrSyntaxError("Line {}: redefinition of union member '{}'"
+                                         .format(attr.lineno, str(attr)))
+                attributes.add(str(attr))
+            if decl:
+                decl.validate(context)
+        if default:
+            attr = default.name
+            if attr:
+                if str(attr) in attributes:
+                    raise XdrSyntaxError("Line {}: redefinition of union member '{}'"
+                                         .format(attr.lineno, str(attr)))
+                attributes.add(str(attr))
+            default.validate(context)
+            
+    
+class Ast_Name(AstNode):
+    def __eq__(self, other):
+        return self.name == other
+    
+    def __str__(self):
+        return self.name
+    
+
+class Ast_Ref(AstNode):
+    def __eq__(self, other):
+        return self.name == other
+    
+    def __str__(self):
+        return self.name
+
+
+class Ast_Value(AstNode):
+    def __str__(self):
+        return self.name
+    
+    def __int__(self):
+        return int(self.name, base=self.base)
 
 class XdrCompile:
     def __init__(self, source):
@@ -692,7 +674,7 @@ class XdrCompile:
         with open(source) as f:
             self.result = parser.parse(f.read())
         self.timestamp = datetime.datetime.now()
-        self.identifiers = []
+        self.result.validate()
     
     def write(self, destination):
         with open(destination, "w") as f:
@@ -703,20 +685,21 @@ class XdrCompile:
             raise SyntaxError("Compilation of '{}' failed".format(self.source))
         
         
-        msg = ["# Generated on {}s from {}".format(self.timestamp, self.source),
+        msg = ["# Generated on {:s} from {:s}".format(str(self.timestamp), os.path.abspath(self.source)),
                "#",
                "# Any manual changes in this file will be lost when the file is regenerated",
                "#",
                "# This file includes the contents of the source file as comments.",
-               "# Following each definition from the source file is the corresponding Python definition",
+               "# Each definition from the source file is followed by the corresponding Python code.",
                "#",
                "#",
-               "from xdrlib2.xdr_types import *"
+               "import xdrlib2.xdr_types as xdr"
                ""
                ]
-        msg.append(str(self.result))
-        msg.append['\n\n']
-        msg.append['# End of generated code\n']
+        msg.append(self.result.block())
+        msg.append("")
+        msg.append("")
+        msg.append('# End of generated code\n')
         return "\n".join(msg)
                    
 if __name__ == "__main__":
@@ -725,11 +708,13 @@ if __name__ == "__main__":
 #         lexer.input(f.read())
 #     for token in lexer:
 #         print(token)
-    
+#       
 #     parser = XdrYacc(debug=True)
 #     with open('../etc/example.xdr') as f:
 #         result = parser.parse(f.read())
 #     print(result)
         
-    XdrCompile('../etc/example.xdr')
+#     print(XdrCompile('../etc/example.xdr').generate())
+    print(XdrCompile('../etc/stress.xdr').generate())
+    
     
