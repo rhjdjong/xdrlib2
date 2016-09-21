@@ -37,6 +37,7 @@ __all__ = ['encode',
            'VarArray',
            'Structure',
            'Union',
+           'OptionalCls',
            'Optional',
            ]
 
@@ -167,7 +168,7 @@ class Void(XdrObject):
         return (other is None or isinstance(other, Void))
     
 
-class _opt_cls(XdrObject): 
+class OptionalCls(XdrObject): 
     def __new__(cls, *args, **kwargs):
         if args in ((), (None,)) and not kwargs:
             v = Void()
@@ -191,13 +192,13 @@ class _opt_cls(XdrObject):
 
 
 def Optional(orig_cls):
-    if issubclass(orig_cls, _opt_cls):
+    if issubclass(orig_cls, OptionalCls):
         return orig_cls
     
     if issubclass(orig_cls, Void):
         raise ValueError('Void class cannot be made optional')
     
-    class new_cls(_opt_cls, orig_cls):
+    class new_cls(OptionalCls, orig_cls):
         pass
     new_cls.__name__ = '*'+orig_cls.__name__
     return new_cls
@@ -634,7 +635,7 @@ class Sequence(XdrObject):
                 size = cls._size
                 if size is None:
                     if variable:
-                        size = Int32u._max
+                        size = Int32u._max - 1
                     else:
                         raise ValueError("Unspecified size not allowed for fixed length sequence '{}'"
                                          .format(cls.__name__))
