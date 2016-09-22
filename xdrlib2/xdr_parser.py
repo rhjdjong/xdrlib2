@@ -95,7 +95,7 @@ class Declaration:
                                                              self.typespec.name))))
         return '\n'.join(txt)
     
-    def inline(self, ind=4):
+    def inline(self):
         if self.name is None:
             return (None, None)
         
@@ -109,18 +109,23 @@ class Declaration:
             else:
                 parameters.append("size = {}".format(self.size))
             if self.typespec.name in ('enum', 'struct', 'union'):
-                txt.append(indent("type = {}".format(self.typespec.inline())))
-            if self.typespec.name not in ('opaque', 'string'):
+                typetxt = [self.basetypes[(self.typespec.name, None)] + "("]
+                typetxt.append(indent(",\n".join(self.typespec.inline())))
+                typetxt.append(")")
+                parameters.append("type = {}".format("\n".join(typetxt)))
+                
+            elif self.typespec.name not in ('opaque', 'string'):
                 parameters.append("type = {}"
                                   .format(self.basetypes.get((self.typespec.name, None),
                                                              self.typespec.name)))
         if parameters:
             txt[0] = txt[0] + '('
-            txt.append(indent(",\n".join(parameters), ind))
-            txt.append(indent(')'))
+            txt.append(indent(",\n".join(parameters)))
+            txt.append(')')
+        txt = '\n'.join(txt)
         if self.optional:
-            txt = ["xdr.Optional(", indent(txt), ")"]
-        return self.name, '\n'.join(txt)
+            txt = "xdr.Optional(" + txt + ")"
+        return self.name, txt
 
 
 class Typespec:
@@ -135,7 +140,8 @@ class Typespec:
                 txt.append("{} = {}".format(n, v))
         elif self.name == 'struct':
             for decl in self.body:
-                txt.append("{} = {}".format(*decl.inline()))
+                if decl.name:
+                    txt.append("{} = {}".format(*decl.inline()))
         elif self.name == 'union':
             switch, caselist, default = self.body
             txt.append("switch = ('{}', {})".format(*switch.inline()))
@@ -143,15 +149,15 @@ class Typespec:
             c_txt = []
             for cv_list, decl in caselist:
                 if len(cv_list) == 1:
-                    c_value = cv_list[0]
+                    c_value = "{}:\n".format(cv_list[0])
                 else:
-                    c_value = "({})".format(', '.join(str(cv) for cv in cv_list))
-                n, t = decl.inline(8)
+                    c_value = "({}):\n".format(', '.join(str(cv) for cv in cv_list))
+                n, t = decl.inline()
                 if n is None:
                     c_type = 'None'
                 else:
                     c_type = "('{}', {})".format(n, t)
-                c_txt.append("{}: {}".format(c_value, c_type))
+                c_txt.append(c_value + indent(c_type))
             txt.append(indent(',\n'.join(c_txt)))
             txt.append("}")
             if default:
@@ -160,9 +166,7 @@ class Typespec:
                     txt.append("default = None")
                 else:
                     txt.append("default = ('{}', {})".format(n, t))
-        else:
-            txt.append("pass")
-        return '\n'.join(txt)
+        return '\n'.join(txt) if txt else 'pass'
 
     def inline(self):
         txt = []
@@ -171,21 +175,41 @@ class Typespec:
                 txt.append("{} = {}".format(n, v))
         elif self.name == 'struct':
             for decl in self.body:
-                txt.append("{} = {}".format(*decl.inline()))
+                if decl.name:
+                    txt.append("('{}', {})".format(*decl.inline()))
         elif self.name == 'union':
             switch, caselist, default = self.body
-            txt.append("switch = ({}, {})".format(*switch.inline()))
-            txt.append("case = {")
+            txt.append("switch = ('{}', {})".format(*switch.inline()))
+            c_txt = []
             for cv_list, decl in caselist:
                 if len(cv_list) == 1:
-                    txt.append(indent("{}: ({}, {})".format(cv_list[0], *decl.inline())))
+                    c_value = "{}:\n".format(cv_list[0])
                 else:
-                    txt.append(indent("({}): ({}, {})".format(', '.join(str(cv) for cv in cv_list),
-                                                              *decl.inline())))
+                    c_value = "({}):\n".format(', '.join(str(cv) for cv in cv_list))
+                n, t = decl.inline()
+                if n is None:
+                    c_type = 'None'
+                else:
+                    c_type = "('{}', {})".format(n, t)
+                c_txt.append(c_value + indent(c_type))
+            txt.append("case = {\n" + indent(',\n'.join(c_txt)))
             txt.append("}")
             if default:
-                txt.append("default = ({}, {})".format(*default.inline()))
-        return ',\n'.join(txt)
+                n, t = default.inline()
+                if n is None:
+                    txt.append("default = None")
+                else:
+                    txt.append("default = ('{}', {})".format(n, t))
+#             for cv_list, decl in caselist:
+#                 if len(cv_list) == 1:
+#                     txt.append(indent("{}: ({}, {})".format(cv_list[0], *decl.inline())))
+#                 else:
+#                     txt.append(indent("({}): ({}, {})".format(', '.join(str(cv) for cv in cv_list),
+#                                                               *decl.inline())))
+#             txt.append("}")
+#             if default:
+#                 txt.append("default = ({}, {})".format(*default.inline()))
+        return txt
 
 class Constant(str):
     def __new__(cls, txt, base):
@@ -364,7 +388,8 @@ class Parser:
             "# Each definition from the source file is followed by the corresponding Python code.",
             "",
             "",
-            "import xdrlib2.xdr_types as xdr"
+            "import xdrlib2.xdr_types as xdr",
+            "from xdrlib2 import FALSE, TRUE",
             ""
             ]
         self.restart()
@@ -445,11 +470,13 @@ class Parser:
         '''definition : TYPEDEF type_declaration ";"'''
         self.output.append('\n\n')
         self.output.append(self.get_source(p))
-        self.output.append(p[2].classdef())
+        typespec = p[2].typespec
+        if typespec is not None:
+            self.output.append(p[2].classdef())
 
     def p_type_declaration(self, p):
         '''type_declaration : declaration'''
-#         typespec = p[1].typespec
+        typespec = p[1].typespec
         name = p[1].name
         if name:
             if name in self.symbols:
@@ -457,8 +484,8 @@ class Parser:
                            .format(p.lineno(1), name))
             
             self.symbols[name] = 'type'
-#             if typespec.name in self.union_types and p[1].var is None:
-#                 self.union_types.add(name)
+            if typespec.name in self.union_types and p[1].var is None:
+                self.union_types.add(name)
         p[0] = p[1]
         
 #     def p_definition_typedef_error(self, p):
@@ -693,29 +720,33 @@ class Parser:
         self.symbols[name] = 'enumerated value'
         p[0] = name
         
-    def p_new_scope(self, p):
-        '''new_scope :'''
-        self.push_scope()
-        
+#     def p_new_scope(self, p):
+#         '''new_scope :'''
+#         self.push_scope()
+#         
     def p_struct_body(self, p):
-        '''struct_body : "{" attribute_declaration_list "}"'''
-        p[0] = p[2]
-    
-    def p_attribute_declaration_list(self, p):
-        '''attribute_declaration_list : new_scope declaration_list'''
+        '''struct_body : begin_struct_body attribute_declaration_list "}"'''
         p[0] = p[2]
         self.pop_scope()
+    
+    def p_begin_struct_body(self, p):
+        '''begin_struct_body : "{"'''
+        self.push_scope()
+        
+    def p_attribute_declaration_list_single(self, p):
+        '''attribute_declaration_list : attribute_declaration ";"'''
+        p[0] = [p[1]]
     
 #     def p_struct_body_error(self, p):
 #         '''struct_body : "{" new_scope error "}"'''
 #         print("Line {}: syntax error".format(p.lineno(3)), file=sys.stderr)
 #     
-    def p_declaration_list_single(self, p):
-        '''declaration_list : attribute_declaration ";"'''
-        p[0] = [p[1]]
-    
-    def p_declaration_list_multi(self, p):
-        '''declaration_list : declaration_list attribute_declaration ";"'''
+#     def p_declaration_list_single(self, p):
+#         '''declaration_list : attribute_declaration ";"'''
+#         p[0] = [p[1]]
+#     
+    def p_attribute_declaration_list_multi(self, p):
+        '''attribute_declaration_list : attribute_declaration_list attribute_declaration ";"'''
         p[0] = p[1] + [p[2]]
     
     def p_attribute_declaration(self, p):
@@ -731,9 +762,13 @@ class Parser:
             self.scope.add(name)
         p[0] = p[1]
         
+    def p_switch(self, p):
+        '''switch : SWITCH'''
+        self.push_scope()
+        
     def p_union_body(self, p):
-        '''union_body : SWITCH new_scope "(" switch_declaration ")" "{" case_list opt_default "}"'''
-        p[0] = (p[4], p[7], p[8])
+        '''union_body : switch "(" switch_declaration ")" "{" case_list opt_default "}"'''
+        p[0] = (p[3], p[6], p[7])
         self.pop_scope()
           
 #     def p_union_body_error(self, p):
@@ -748,6 +783,7 @@ class Parser:
         if typename not in self.union_types:
             self.error("Line {}: invalid type '{}' for union discriminator. Must be (unsigned) int or enum."
                        .format(p.lineno(1), typename))
+        
         p[0] = p[1]
     
     def p_case_list_single(self, p):

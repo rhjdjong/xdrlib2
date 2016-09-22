@@ -138,7 +138,9 @@ class XdrObject(metaclass=_MetaXdrObject):
 
     @classmethod
     def typedef(cls, *args, **kwargs):
-        return cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
+       c = cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
+       c._abstract = False
+       return c
     
 
 class Void(XdrObject):
@@ -926,10 +928,10 @@ class Structure(XdrObject):
     
     def __new__(cls, *args, **kwargs):
         if cls._abstract and not kwargs:
-            if all((isinstance(x, collections.abc.Sequence) and
-                    len(x) == 2 and
-                    isinstance(x[0], str) and
-                    issubclass(x[1], XdrObject)) for x in args):
+            if args and all((isinstance(x, collections.abc.Sequence) and
+                             len(x) == 2 and
+                             isinstance(x[0], str) and
+                             issubclass(x[1], XdrObject)) for x in args):
                 return cls.typedef(*args)
                 
         if cls._abstract:
@@ -940,25 +942,37 @@ class Structure(XdrObject):
     def __init__(self, *args, **kwargs):
         self._members = OrderedDict.fromkeys(self._types)
             
-        if len(args) + len(kwargs) > len(self._members) :
-            raise ValueError("Too many values for class '{}'".format(self.__class__.__name__))
-        for name in kwargs:
-            if name in tuple(self._members.keys())[:len(args)]:
-                raise ValueError("Multiple values specified for member '{}' in class '{}' "
-                                 .format(name, self.__class__.__name__))
-            if name not in tuple(self._members.keys())[len(args):]:
-                raise ValueError("Invalid member name '{}'  for class '{}'"
-                                 .format(name, self.__class__.__name__))
+#         if len(args) + len(kwargs) > len(self._members) :
+#             raise ValueError("Too many values for class '{}'".format(self.__class__.__name__))
+#         for name in kwargs:
+#             if name in tuple(self._members.keys())[:len(args)]:
+#                 raise ValueError("Multiple values specified for member '{}' in class '{}' "
+#                                  .format(name, self.__class__.__name__))
+#             if name not in tuple(self._members.keys())[len(args):]:
+#                 raise ValueError("Invalid member name '{}'  for class '{}'"
+#                                  .format(name, self.__class__.__name__))
         for (name, typ), value in zip(self._types.items(), args):
-            self._members[name] = value if value.__class__ is typ else typ(value)
+            if value.__class__ is typ:
+                self._members[name] = value
+            elif issubclass(typ, (Union, Structure)) and isinstance(value, collections.abc.Sequence):
+                self._members[name] = typ(*value)
+            else:
+                self._members[name] = typ(value)
         for (name, value) in kwargs.items():
             typ = self._types[name]
             self._members[name] = value if value.__class__ is typ else typ(value)
 
     @classmethod
     def _check_arguments(cls, *args, **kwargs):
-        pass
-        
+        if len(args) + len(kwargs) > len(cls._types) :
+            raise ValueError("Too many values for class '{}'".format(cls.__name__))
+        for name in kwargs:
+            if name in tuple(cls._types.keys())[:len(args)]:
+                raise ValueError("Multiple values specified for member '{}' in class '{}' "
+                                 .format(name, cls.__name__))
+            if name not in tuple(cls._types.keys())[len(args):]:
+                raise ValueError("Invalid member name '{}'  for class '{}'"
+                                 .format(name, cls.__name__))
     @classmethod
     def _prepare(cls, dct):
         if not hasattr(cls, '_types'):
