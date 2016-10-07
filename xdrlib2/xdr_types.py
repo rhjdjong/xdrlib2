@@ -104,7 +104,7 @@ class _MetaXdrObject(type):
         return OrderedDict()
     
     
-class XdrObject(metaclass=_MetaXdrObject):
+class XdrType(metaclass=_MetaXdrObject):
     @classmethod
     def _customize_class(cls, dct):
         # This method is called  during the initialization phase of class creation.
@@ -145,7 +145,7 @@ class XdrObject(metaclass=_MetaXdrObject):
         return c
     
 
-class Void(XdrObject):
+class Void(XdrType):
     def __new__(cls, _=None):
         return super().__new__(cls)
     
@@ -164,10 +164,18 @@ class Void(XdrObject):
         return (other is None or isinstance(other, Void))
     
 
-class Optional(XdrObject):
+class Optional(XdrType):
     def __new__(cls, *args, **kwargs):
-        if cls._is_called_with_XDR_class(*args, **kwargs):
+        # Class Optional serves both as a mix-in class for optional classes
+        # and as a factory for optional classes.
+        # If it is "instantiated" with an existing XDR class, then it
+        # creates and returns a new, optional XDR class.
+        # In all other cases it is the instantiation of an already
+        # existing optional class.
+        
+        if cls._is_called_to_create_a_new_optional_class(*args, **kwargs):
             return cls._make_optional_class(args[0])
+        
         if cls._is_instantiated_as_absent(*args, **kwargs):
             return Absent()
         return super().__new__(cls, *args, **kwargs)
@@ -186,12 +194,16 @@ class Optional(XdrObject):
         return obj, source
     
     @classmethod
-    def _is_called_with_XDR_class(cls, *args, **kwargs):
+    def _is_called_to_create_a_new_optional_class(cls, *args, **kwargs):
+        # Derived classes cannot be used to create new optional classes
         if cls is not Optional: return False
-        if kwargs: return False
+        
+        # To create a new optional class, Optional must be called
+        # with a single argument that is an XDR type.
+        if kwargs: return False 
         if len(args) != 1: return False
-        if not inspect.isclass(args[0]): return False
-        return issubclass(args[0], XdrObject)
+        if not inspect.isclass(args[0]): return False 
+        return issubclass(args[0], XdrType)
     
     @staticmethod
     def _is_instantiated_as_absent(*args, **kwargs):
@@ -199,19 +211,22 @@ class Optional(XdrObject):
         
     @classmethod
     def _make_optional_class(cls, original_class):
-        if issubclass(original_class, Optional):
-            return original_class
         if issubclass(original_class, Void):
             raise ValueError('Void (sub)class cannot be made optional')
+        if issubclass(original_class, Optional):
+            return original_class
         return cls.__class__('*'+original_class.__name__, (Optional, original_class), {})
 
 
-class Absent(Void):
+class Absent(Optional, Void):
+    def __new__(cls, *args, **kwargs):
+        return Void.__new__(cls, *args, **kwargs)
+    
     def to_bytes(self):
         return FALSE.to_bytes()  # @UndefinedVariable
     
             
-class Atomic(XdrObject):
+class Atomic(XdrType):
     @classmethod
     def _customize_class(cls, dct):
         for name, value in dct.items():
@@ -396,11 +411,11 @@ class Enumeration(Int32):
         
         # stack[0] is the frame where this _customize_class function is executed.
         # stack[1] is the frame of the function calling this _customize_class function,
-        #   i.e. the __init__ of the XdrObject metaclass.
+        #   i.e. the __init__ of the XdrType metaclass.
         # stack[2] is the frame where the class is created.
         method = 'direct'
         for f in stack[2:]:
-            # Check if this is the typedef method defined in XdrObject
+            # Check if this is the typedef method defined in XdrType
             if method == 'direct' and f.function == 'typedef' and f.frame.f_globals.get('_guard') is _guard:
                 method = 'typedef'
                 continue # Try the next frame
@@ -610,7 +625,7 @@ class Float128(Float):
         return v, source
         
 
-class Sequence(XdrObject):
+class Sequence(XdrType):
     _abstract = True
     
     def __new__(cls, data):
@@ -650,7 +665,7 @@ class Sequence(XdrObject):
                                      .format(size, cls.__name__))
                 cls._abstract = False
             if hasattr(cls, '_type'):
-                if not issubclass(cls._type, XdrObject):
+                if not issubclass(cls._type, XdrType):
                     raise ValueError("Invalid element type '{}' for sequence type '{}'"
                                      .format(cls._type.__name__, cls.__name__))     
 
@@ -925,7 +940,7 @@ class VarArray(VarSequence, Array):
         return cls(lst), source
 
 
-class Structure(XdrObject):
+class Structure(XdrType):
     _abstract = True
     
     def __new__(cls, *args, **kwargs):
@@ -933,7 +948,7 @@ class Structure(XdrObject):
             if args and all((isinstance(x, collections.abc.Sequence) and
                              len(x) == 2 and
                              isinstance(x[0], str) and
-                             issubclass(x[1], XdrObject)) for x in args):
+                             issubclass(x[1], XdrType)) for x in args):
                 return cls.typedef(*args)
                 
         if cls._abstract:
@@ -988,7 +1003,7 @@ class Structure(XdrObject):
             if name in _reserved_words:
                 raise ValueError("Invalid structure member name '{}' (reserved word)"
                                  .format(name))
-            if _is_valid_name(name) and inspect.isclass(value) and issubclass(value, XdrObject):
+            if _is_valid_name(name) and inspect.isclass(value) and issubclass(value, XdrType):
                 member_types[name] = value
         
         if not member_types:
@@ -1051,7 +1066,7 @@ class Structure(XdrObject):
 
 _UnionTuple = namedtuple('_UnionTuple', 'switch case')    
     
-class Union(XdrObject, _UnionTuple):
+class Union(XdrType, _UnionTuple):
     _abstract = True
     
     def __new__(cls, *args, **kwargs):
@@ -1122,7 +1137,7 @@ class Union(XdrObject, _UnionTuple):
             else:
                 case_name, case_type = case_spec.__name__, case_spec
                 
-            if case_type and not issubclass(case_type, XdrObject):
+            if case_type and not issubclass(case_type, XdrType):
                 raise ValueError("Invalid type '{}' in case specification for Union class '{}', branch '{}'"
                                  .format(case_type.__name__, cls.__name__, case_value))
             if case_name and case_name in names.values():
