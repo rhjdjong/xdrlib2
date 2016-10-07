@@ -242,7 +242,7 @@ class TestParser(unittest.TestCase):
         ns = {}
         exec(result, ns)
         self.assertTrue(issubclass(ns['MyInt'], xdr.Int32))
-        self.assertTrue(issubclass(ns['MyInt'], xdr.OptionalCls))
+        self.assertTrue(issubclass(ns['MyInt'], xdr.Optional))
        
     def test_typedef_simple_type_fixed_array(self):
         txt = "const SIZE=20;\ntypedef int iarr[10];\ntypedef float farr[SIZE];"

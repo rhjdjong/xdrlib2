@@ -37,7 +37,6 @@ __all__ = ['encode',
            'VarArray',
            'Structure',
            'Union',
-           'OptionalCls',
            'Optional',
            ]
 
@@ -48,11 +47,11 @@ _guard = object()
 
 def encode(obj):
     '''Returns the XDR-encoded representation of `obj`'''
-    return obj._encode()
+    return obj.to_bytes()
 
 def decode(cls, source):
     '''Decodes the XDR-encoded `source`, and returns the corresponding `cls` instance.'''
-    return cls._decode(source)
+    return cls.from_bytes(source)
     
     
 def _unpack(fmt, size, source):
@@ -93,9 +92,10 @@ def _split_and_remove_padding(byte_string, size):
 
 class _MetaXdrObject(type):
     def __init__(self, name, bases, dct):
-        # Execute additional preparation actions that are necessary at class creation
         super().__init__(name, bases, dct)
-        self._prepare(dct)
+        # Execute additional actions that are necessary for
+        # class customization when the class is created.
+        self._customize_class(dct)
     
     @classmethod
     def __prepare__(mcls, cls, bases):
@@ -105,31 +105,33 @@ class _MetaXdrObject(type):
     
     
 class XdrObject(metaclass=_MetaXdrObject):
-    _abstract = True
-    
-    def __new__(cls, *args, **kwargs):
-        cls._check_arguments(*args, **kwargs)
-        return super().__new__(cls, *args, **kwargs)
-
     @classmethod
-    def _prepare(cls, dct):
+    def _customize_class(cls, dct):
         # This method is called  during the initialization phase of class creation.
         # Subclasses are expected to override this method to execute any
-        # customization that is required for the class
+        # customization that is required for the class.
         pass
     
-    def _encode(self):
+    def __new__(cls, *args, **kwargs):
+        cls._validate_arguments(*args, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
+    
+    @classmethod
+    def _validate_arguments(cls, *args, **kwargs):
+        raise NotImplementedError
+    
+    def to_bytes(self):
         raise NotImplementedError
 
     @classmethod
-    def _decode(cls, source):
-        obj, source = cls._parse(source)
+    def from_bytes(cls, source):
+        obj, source = cls._extract(source)
         if len(source) > 0:
-            raise ValueError('Unpacking error: too much data')
+            raise ValueError('Decoding error: too much data')
         return obj
 
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         raise NotImplementedError
 
     @classmethod
@@ -138,78 +140,88 @@ class XdrObject(metaclass=_MetaXdrObject):
 
     @classmethod
     def typedef(cls, *args, **kwargs):
-       c = cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
-       c._abstract = False
-       return c
+        c = cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
+        c._abstract = False
+        return c
     
 
 class Void(XdrObject):
-    _abstract = False
-    
     def __new__(cls, _=None):
         return super().__new__(cls)
     
-    def __init__(self, _=None):
-        self._optional = False
-    
     @classmethod
-    def _check_arguments(cls):
+    def _validate_arguments(cls):
         pass
 
-    def _encode(self):
-        if self._optional:
-            return encode(FALSE) # @UndefinedVariable
-        else:
-            return b''
+    def to_bytes(self):
+        return b''
 
     @classmethod
-    def _parse(cls, source):
-        return cls(None), source
+    def _extract(cls, source):
+        return Void(), source
     
     def __eq__(self, other):
         return (other is None or isinstance(other, Void))
     
 
-class OptionalCls(XdrObject): 
+class Optional(XdrObject):
     def __new__(cls, *args, **kwargs):
-        if args in ((), (None,)) and not kwargs:
-            v = Void()
-            v._optional = True
-            return v
+        if cls._is_called_with_XDR_class(*args, **kwargs):
+            return cls._make_optional_class(args[0])
+        if cls._is_instantiated_as_absent(*args, **kwargs):
+            return Absent()
         return super().__new__(cls, *args, **kwargs)
     
-    def _encode(self):
-        return encode(TRUE) + super()._encode() # @UndefinedVariable
+    def to_bytes(self):
+        return TRUE.to_bytes() + super().to_bytes() # @UndefinedVariable
     
     @classmethod
-    def _parse(cls, source):
-        present, source = Boolean._parse(source)
+    def _extract(cls, source):
+        present, source = Boolean._extract(source)
         if present:
-            obj, source = super()._parse(source)
+            obj, source = super()._extract(source)
             obj.__class__ = cls
         else:
-            obj = Void()
-            obj._optional = True
+            obj = Absent()
         return obj, source
-
-
-def Optional(orig_cls):
-    if issubclass(orig_cls, OptionalCls):
-        return orig_cls
     
-    if issubclass(orig_cls, Void):
-        raise ValueError('Void class cannot be made optional')
+    @classmethod
+    def _is_called_with_XDR_class(cls, *args, **kwargs):
+        if cls is not Optional: return False
+        if kwargs: return False
+        if len(args) != 1: return False
+        if not inspect.isclass(args[0]): return False
+        return issubclass(args[0], XdrObject)
     
-    class new_cls(OptionalCls, orig_cls):
-        pass
-    new_cls.__name__ = '*'+orig_cls.__name__
-    return new_cls
+    @staticmethod
+    def _is_instantiated_as_absent(*args, **kwargs):
+        return args in ((), (None,)) and not kwargs
         
+    @classmethod
+    def _make_optional_class(cls, original_class):
+        if issubclass(original_class, Optional):
+            return original_class
+        if issubclass(original_class, Void):
+            raise ValueError('Void (sub)class cannot be made optional')
+        return cls.__class__('*'+original_class.__name__, (Optional, original_class), {})
 
+
+class Absent(Void):
+    def to_bytes(self):
+        return FALSE.to_bytes()  # @UndefinedVariable
+    
             
 class Atomic(XdrObject):
-    _abstract = False
-    
+    @classmethod
+    def _customize_class(cls, dct):
+        for name, value in dct.items():
+            if name in ('min', 'max', 'fmt'):
+                delattr(cls, name)
+                if name == 'fmt':
+                    value = endian + value
+                    setattr(cls, '_encoded_size', struct.calcsize(value))
+                setattr(cls, '_'+name, value)
+            
     def __new__(cls, value):
         try:
             cls._fmt
@@ -219,24 +231,14 @@ class Atomic(XdrObject):
         return super().__new__(cls, value)
 
     @classmethod
-    def _prepare(cls, dct):
-        for name, value in dct.items():
-            if name in ('min', 'max', 'fmt'):
-                delattr(cls, name)
-                if name == 'fmt':
-                    value = endian + value
-                    setattr(cls, '_encoded_size', struct.calcsize(value))
-                setattr(cls, '_'+name, value)
-            
-    @classmethod
-    def _check_arguments(cls, value):
+    def _validate_arguments(cls, value):
         pass
     
-    def _encode(self):
+    def to_bytes(self):
         return _pad(struct.pack(self._fmt, self))
 
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         tup, source = _unpack(cls._fmt, cls._encoded_size, source)
         return cls(tup[0]), source
 
@@ -333,7 +335,7 @@ class Enumeration(Int32):
         return super().__new__(cls, value)
     
     @classmethod
-    def _check_arguments(cls, value):
+    def _validate_arguments(cls, value):
         if not isinstance(value, numbers.Integral):
             raise ValueError("Invalid argument type '{}' for class '{}'"
                              .format(type(value), cls.__name__))
@@ -342,7 +344,7 @@ class Enumeration(Int32):
                              .format(value, cls.__name__))
 
     @classmethod
-    def _prepare(cls, dct):
+    def _customize_class(cls, dct):
         # Consturct a dictionary of valid name, value pairs
         # from the class attributes.
         if not hasattr(cls, '_members'):
@@ -392,8 +394,8 @@ class Enumeration(Int32):
         # The enumerated values are added to this namespace
         stack = inspect.stack()
         
-        # stack[0] is the frame where this _prepare function is executed.
-        # stack[1] is the frame of the function calling this _prepare function,
+        # stack[0] is the frame where this _customize_class function is executed.
+        # stack[1] is the frame of the function calling this _customize_class function,
         #   i.e. the __init__ of the XdrObject metaclass.
         # stack[2] is the frame where the class is created.
         method = 'direct'
@@ -472,7 +474,7 @@ class Float128(Float):
         v._encoded = b''
         return v
     
-    def _encode(self):
+    def to_bytes(self):
         if not self._encoded:
             # The 'struct' module does not support quadruple-precision encoding.
             # The best we can do is encode it as double-precision,
@@ -552,7 +554,7 @@ class Float128(Float):
         return _pad(self._encoded)
 
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         # Use the first 16 bytes of the source.
         # Mimic the bahaviour of struct.unpack if there are not enough bytes.
         buf, source = _split_and_remove_padding(source, 16)
@@ -622,7 +624,7 @@ class Sequence(XdrObject):
         super().__init__(data)
     
     @classmethod
-    def _prepare(cls, dct):
+    def _customize_class(cls, dct):
         if cls._abstract:
             for attr, value in dct.items():
                 if attr in ('variable', 'size', 'type'):
@@ -655,7 +657,7 @@ class Sequence(XdrObject):
           
 
     @classmethod
-    def _check_arguments(cls, value):
+    def _validate_arguments(cls, value):
         if not isinstance(value, collections.abc.Sequence):
             raise ValueError("Invalid argument type '{}' for class '{}'"
                              .format(type(value), cls.__name__))
@@ -752,11 +754,11 @@ class FixedOpaque(FixedSequence, Opaque):
         self._encoded_size = self._size
         super().__init__(data)
         
-    def _encode(self):
+    def to_bytes(self):
         return _pad(bytes(self))
     
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         data, source = _split_and_remove_padding(source, cls._size)
         return cls(data), source
         
@@ -790,12 +792,12 @@ class _VarOpaque(VarSequence, Opaque):
     def _encoded_size(self):
         return _padded_size(Int32u._encoded_size) + len(self)
     
-    def _encode(self):
+    def to_bytes(self):
         return encode(Int32u(len(self))) + _pad(bytes(self))
     
     @classmethod
-    def _parse(cls, source):
-        size, source = Int32u._parse(source)
+    def _extract(cls, source):
+        size, source = Int32u._extract(source)
         data, source = _split_and_remove_padding(source, size)
         return cls(data), source
 
@@ -868,14 +870,14 @@ class FixedArray(FixedSequence, Array):
     def _encoded_size(self):
         return sum(x._encoded_size for x in self)
     
-    def _encode(self):
+    def to_bytes(self):
         return b''.join(encode(x) for x in self)
     
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         lst = []
         for _ in range(cls._size):
-            item, source = cls._type._parse(source)
+            item, source = cls._type._extract(source)
             lst.append(item)
         return cls(lst), source
 
@@ -910,15 +912,15 @@ class VarArray(VarSequence, Array):
     def _encoded_size(self):
         return _padded_size(Int32u._encoded_size) + sum(x._encoded_size for x in self)
     
-    def _encode(self):
+    def to_bytes(self):
         return encode(Int32u(len(self))) + b''.join(encode(x) for x in self)
     
     @classmethod
-    def _parse(cls, source):
-        size, source = Int32u._parse(source)
+    def _extract(cls, source):
+        size, source = Int32u._extract(source)
         lst = []
         for _ in range(size):
-            item, source = cls._type._parse(source)
+            item, source = cls._type._extract(source)
             lst.append(item)
         return cls(lst), source
 
@@ -963,7 +965,7 @@ class Structure(XdrObject):
             self._members[name] = value if value.__class__ is typ else typ(value)
 
     @classmethod
-    def _check_arguments(cls, *args, **kwargs):
+    def _validate_arguments(cls, *args, **kwargs):
         if len(args) + len(kwargs) > len(cls._types) :
             raise ValueError("Too many values for class '{}'".format(cls.__name__))
         for name in kwargs:
@@ -974,21 +976,20 @@ class Structure(XdrObject):
                 raise ValueError("Invalid member name '{}'  for class '{}'"
                                  .format(name, cls.__name__))
     @classmethod
-    def _prepare(cls, dct):
+    def _customize_class(cls, dct):
         if not hasattr(cls, '_types'):
             cls._types = OrderedDict()
 
         member_types = OrderedDict()
         for name, value in dct.items():
             if name in member_types:
-                raise ValueError("Redefinition of enumerated value for name '{}'"
+                raise ValueError("Redefinition of structure name '{}'"
                                  .format(name))
             if name in _reserved_words:
                 raise ValueError("Invalid structure member name '{}' (reserved word)"
                                  .format(name))
-            if _is_valid_name(name):
-                if issubclass(value, XdrObject):
-                    member_types[name] = value
+            if _is_valid_name(name) and inspect.isclass(value) and issubclass(value, XdrObject):
+                member_types[name] = value
         
         if not member_types:
             # No member elements defined. This is either the base 'Structure' class
@@ -1008,14 +1009,14 @@ class Structure(XdrObject):
     def _make_class_dictionary(cls, *args):
         return OrderedDict(args)
 
-    def _encode(self):
+    def to_bytes(self):
         return b''.join(encode(v) for v in self._members.values())
 
     @classmethod
-    def _parse(cls, source):
+    def _extract(cls, source):
         dct = {}
         for name, typ in cls._types.items():
-            obj, source = typ._parse(source)
+            obj, source = typ._extract(source)
             dct[name] = obj
         return cls(**dct), source
 
@@ -1071,7 +1072,7 @@ class Union(XdrObject, _UnionTuple):
         return super().__new__(cls, switch, value)
     
     @classmethod
-    def _prepare(cls, dct):
+    def _customize_class(cls, dct):
         if not hasattr(cls, '_types'):
             cls._types = {}
 
@@ -1157,21 +1158,21 @@ class Union(XdrObject, _UnionTuple):
         return c_type
         
     @classmethod
-    def _check_arguments(cls, *args, **kwargs):
+    def _validate_arguments(cls, *args, **kwargs):
         pass
     
     @classmethod
     def _make_class_dictionary(cls, **kwargs):
         return kwargs
 
-    def _encode(self):
+    def to_bytes(self):
         return encode(self.switch) + encode(self.case)
     
     @classmethod
-    def _parse(cls, source):
-        switch, source = cls._types['switch']._parse(source)
+    def _extract(cls, source):
+        switch, source = cls._types['switch']._extract(source)
         case_type = cls._case_type(switch)
-        case, source = case_type._parse(source)
+        case, source = case_type._extract(source)
         return cls(switch, case), source
 
     def __getattr__(self, name):

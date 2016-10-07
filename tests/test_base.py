@@ -42,7 +42,10 @@ class TestOptional(unittest.TestCase):
         t = Optional(Int32)
         self.assertEqual(t.__name__, '*Int32')
         self.assertTrue(issubclass(t, Int32))
-          
+    
+    def test_cannot_create_optional_classes_through_derived_optional_class(self):
+        opt_cls = Optional(Int32)
+        self.assertRaises(TypeError, opt_cls, Float32)
     
     
 if __name__ == "__main__":
