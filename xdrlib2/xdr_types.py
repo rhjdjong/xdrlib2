@@ -143,11 +143,12 @@ class XdrType(metaclass=_MetaXdrObject):
         c = cls.__class__('_', (cls,), cls._make_class_dictionary(*args, **kwargs))
         c._abstract = False
         return c
+
     
 
 class Void(XdrType):
     def __new__(cls, _=None):
-        return super().__new__(cls)
+        return object.__new__(cls)
     
     @classmethod
     def _validate_arguments(cls):
@@ -165,6 +166,67 @@ class Void(XdrType):
     
 
 class Optional(XdrType):
+    """
+    Optional(cls) --> optional class.
+    
+    The class Optional is primarily used as a decorator to create an optional XDR type.
+    >>> opt_cls = Optional(Int32)
+    
+    The name of the optional class is the name of the original class,
+    prepended with an asterix '*'
+    >>> opt_cls.__name__
+    '*Int32'
+    
+    Class Optional is also a mix-in class for these optional XDR types.
+    >>> issubclass(opt_cls, Optional)
+    True
+    
+    An optional type in itself is not a subclass of the original type though.
+    >>> issubclass(opt_cls, Int32)
+    False
+    
+    The reason for that is that the actual type depends on whether or not
+    the value with the optional type is present or not.
+    
+    When the value is present, it is an instance
+    of both the original type and the optional type.
+    >>> x = opt_cls(3)
+    >>> isinstance(x, Int32)
+    True
+    >>> isinstance(x, opt_cls)
+    True
+    >>> isinstance(x, Optional)
+    True
+    
+    When the value is absent, it is not an instance of the original type.
+    Instead it is an instance of both Void and the optional type.
+    >>> y = opt_cls(None)
+    >>> isinstance(y, Int32)
+    False
+    >>> isinstance(y, Void)
+    True
+    >>> isinstance(y, opt_cls)
+    True
+    >>> isinstance(y, Optional)
+    True
+    
+    Note that the actual types for present and absent values are different
+    from each other, and different from the optional type
+    >>> type(x) is type(y)
+    False
+    >>> type(x) is opt_cls
+    False
+    >>> type(y) is opt_cls
+    False
+    
+    The actual class hierarchy is as follows:
+    >>> opt_cls.__bases__ == (Optional,)
+    True
+    >>> type(x).__bases__ == (opt_cls, Int32)
+    True
+    >>> type(y).__bases__ == (opt_cls, Void)
+    True
+    """
     def __new__(cls, *args, **kwargs):
         # Class Optional serves both as a mix-in class for optional classes
         # and as a factory for optional classes.
@@ -174,23 +236,27 @@ class Optional(XdrType):
         # existing optional class.
         
         if cls._is_called_to_create_a_new_optional_class(*args, **kwargs):
-            return cls._make_optional_class(args[0])
+            optional_class = cls._make_optional_class(args[0])
+            return optional_class
         
         if cls._is_instantiated_as_absent(*args, **kwargs):
-            return Absent()
-        return super().__new__(cls, *args, **kwargs)
+            return Void.__new__(cls._absent_class)
+        return super().__new__(cls._present_class, *args, **kwargs)
     
     def to_bytes(self):
-        return TRUE.to_bytes() + super().to_bytes() # @UndefinedVariable
+        if isinstance(self, Void):
+            return FALSE.to_bytes()  # @UndefinedVariable
+        else:
+            return TRUE.to_bytes() + super().to_bytes() # @UndefinedVariable
     
     @classmethod
     def _extract(cls, source):
         present, source = Boolean._extract(source)
         if present:
-            obj, source = super()._extract(source)
-            obj.__class__ = cls
+            obj, source = cls._original_class._extract(source)
+            obj.__class__ = cls._present_class
         else:
-            obj = Absent()
+            obj = cls._absent_class()
         return obj, source
     
     @classmethod
@@ -215,16 +281,22 @@ class Optional(XdrType):
             raise ValueError('Void (sub)class cannot be made optional')
         if issubclass(original_class, Optional):
             return original_class
-        return cls.__class__('*'+original_class.__name__, (Optional, original_class), {})
+        optional_class = cls.__class__('*'+original_class.__name__, (Optional,), {})
+        optional_class._original_class = original_class
+        optional_class._add_present_class()
+        optional_class._add_absent_class()
+        return optional_class
 
+    @classmethod
+    def _add_absent_class(cls):
+        absent_class = cls.__class__(cls.__name__, (cls, Void), {})
+        cls._absent_class = absent_class
 
-class Absent(Optional, Void):
-    def __new__(cls, *args, **kwargs):
-        return Void.__new__(cls, *args, **kwargs)
-    
-    def to_bytes(self):
-        return FALSE.to_bytes()  # @UndefinedVariable
-    
+    @classmethod
+    def _add_present_class(cls):
+        present_class = cls.__class__(cls.__name__, (cls, cls._original_class), {})
+        cls._present_class = present_class
+               
             
 class Atomic(XdrType):
     @classmethod
@@ -237,16 +309,16 @@ class Atomic(XdrType):
                     setattr(cls, '_encoded_size', struct.calcsize(value))
                 setattr(cls, '_'+name, value)
             
-    def __new__(cls, value):
+    def __new__(cls, *args, **kwargs):
         try:
             cls._fmt
         except AttributeError:
             raise NotImplementedError("Cannot instantiate abstract '{}' class"
                                       .format(cls.__name__))
-        return super().__new__(cls, value)
+        return super().__new__(cls, *args, **kwargs)
 
     @classmethod
-    def _validate_arguments(cls, value):
+    def _validate_arguments(cls, *args, **kwargs):
         pass
     
     def to_bytes(self):
@@ -263,8 +335,15 @@ class Atomic(XdrType):
 
 
 class Integer(Atomic, int):
-    def __new__(cls, value=0):
-        v = super().__new__(cls, value)
+    def __new__(cls, value=0, base=None):
+        if base is None and isinstance(value, cls):
+                return value
+        
+        if base is None:
+            v = super().__new__(cls, value)
+        else:
+            v = super().__new__(cls, value, base)
+            
         if cls._min <= v < cls._max:
             return v
         raise ValueError('Value out of range for class {}: {}'.format(cls.__name__, v))
