@@ -20,76 +20,94 @@ class TestOptionalTypes(unittest.TestCase):
     def test_optional_integer_is_not_a_subtype_of_integer(self):
         self.assertFalse(issubclass(self.optional_integer_type, xdr.Int32))
         
-    def test_instantiated_optional_integer_is_instance_of_integer(self):
-        x = self.optional_integer_type(1024)
-        self.assertIsInstance(x, xdr.Int32)
-        self.assertIsInstance(x, self.optional_integer_type)
-        self.assertIsInstance(x, xdr.Optional)
-    
-    def test_absent_optional_integer_is_instance_of_Void(self):
-        x = self.optional_integer_type(None)
-        self.assertNotIsInstance(x, xdr.Int32)
-        self.assertIsInstance(x, xdr.Void)
-        self.assertIsInstance(x, self.optional_integer_type)
-        self.assertIsInstance(x, xdr.Optional)
-    
-    def test_present_optional_value_can_be_encoded_through_optional_class(self):
-        encoded_value = self.optional_integer_type.to_bytes(self.optional_integer_type(3))
-        self.assertEqual(encoded_value, b'\0\0\0\x01' b'\0\0\0\x03')
-    
-    def test_absent_optional_value_can_be_encoded_through_optional_class(self):
-        encoded_value = self.optional_integer_type.to_bytes(self.optional_integer_type())
-        self.assertEqual(encoded_value, b'\0\0\0\0')
-    
-    def test_present_optional_value_can_be_decoded_through_optional_class(self):
-        x = self.optional_integer_type.from_bytes(b'\0\0\0\x01' b'\0\0\0\x03')
-        self.assertEqual(x, 3)
-        self.assertIsInstance(x, self.optional_integer_type)
-        self.assertIsInstance(x, xdr.Int32)
+    def test_present_optional_value_instantiation(self):
+        for cls in (self.optional_integer_type, # direct instantiation
+                    self.optional_integer_type(3).__class__, # through the class of a present value
+                    self.optional_integer_type(None).__class__): # through the class of an absent value
+            with self.subTest(cls=cls):
+                y = cls(5)
+                self.assertEqual(y, 5)
+                self.assertIsInstance(y, xdr.Int32)
+                self.assertIsInstance(y, self.optional_integer_type)
+                self.assertIsInstance(y, xdr.Optional)
         
-    def test_absent_optional_value_can_be_decoded_through_optional_class(self):
-        x = self.optional_integer_type.from_bytes(b'\0\0\0\0')
-        self.assertEqual(x, None)
-        self.assertIsInstance(x, self.optional_integer_type)
-        self.assertIsInstance(x, xdr.Void)
-    
-    def test_present_optional_value_can_be_encoded_through_instance(self):
+    def test_absent_optional_value_instantiation(self):
+        for cls in (self.optional_integer_type, # direct instantiation
+                    self.optional_integer_type(3).__class__, # through the class of a present value
+                    self.optional_integer_type(None).__class__): # through the class of an absent value
+            with self.subTest(cls=cls):
+                y = cls(None)
+                self.assertEqual(y, None)
+                self.assertNotIsInstance(y, xdr.Int32)
+                self.assertIsInstance(y, xdr.Void)
+                self.assertIsInstance(y, self.optional_integer_type)
+                self.assertIsInstance(y, xdr.Optional)
+        
+    def test_present_optional_value_encoding(self):
         x = self.optional_integer_type(3)
-        self.assertEqual(x.to_bytes(), b'\0\0\0\x01' b'\0\0\0\x03')
-    
-    def test_absent_optional_value_can_be_encoded_through_instance(self):
-        x = self.optional_integer_type()
-        self.assertEqual(x.to_bytes(), b'\0\0\0\0')
-    
-    def test_optional_value_can_be_decoded_through_present_instance(self):
-        x = self.optional_integer_type(2)
-        y = x.from_bytes(b'\0\0\0\x01' b'\0\0\0\x03')
-        self.assertEqual(y, 3)
-        self.assertIsInstance(y, self.optional_integer_type)
-        self.assertIsInstance(y, xdr.Int32)
-        z = x.from_bytes(b'\0\0\0\0')
-        self.assertEqual(z, None)
-        self.assertIsInstance(z, self.optional_integer_type)
-        self.assertIsInstance(z, xdr.Void)
-    
-    def test_optional_value_can_be_decoded_through_absent_instance(self):
-        x = self.optional_integer_type()
-        y = x.from_bytes(b'\0\0\0\x01' b'\0\0\0\x03')
-        self.assertEqual(y, 3)
-        self.assertIsInstance(y, self.optional_integer_type)
-        self.assertIsInstance(y, xdr.Int32)
-        z = x.from_bytes(b'\0\0\0\0')
-        self.assertEqual(z, None)
-        self.assertIsInstance(z, self.optional_integer_type)
-        self.assertIsInstance(z, xdr.Void)
-    
+        y = self.optional_integer_type()
+        for encoded_value in (x.encode(),
+                              self.optional_integer_type.encode(x),
+                              self.optional_integer_type.encode(3),
+                              x.__class__.encode(x),
+                              x.__class__.encode(3),
+                              y.__class__.encode(x),
+                              y.__class__.encode(3)):
+            with self.subTest(encoded_value=encoded_value):
+                self.assertEqual(encoded_value, xdr.TRUE.encode() + xdr.Int32(3).encode())  # @UndefinedVariable
+
+    def test_absent_optional_value_encoding(self):
+        x = self.optional_integer_type(3)
+        y = self.optional_integer_type()
+        for encoded_value in (y.encode(),
+                              self.optional_integer_type.encode(y),
+                              self.optional_integer_type.encode(None),
+                              x.__class__.encode(y),
+                              x.__class__.encode(None),
+                              y.__class__.encode(y),
+                              y.__class__.encode(None)):
+            with self.subTest(encoded_value=encoded_value):
+                self.assertEqual(encoded_value, xdr.FALSE.encode())  # @UndefinedVariable
+
+    def test_present_value_decoding(self):
+        encoded_value = xdr.TRUE.encode() + xdr.Int32(3).encode()  # @UndefinedVariable
+        for obj in (self.optional_integer_type, # direct instantiation
+                    self.optional_integer_type(3), # through a present value
+                    self.optional_integer_type(3).__class__, # through the class of a present value
+                    self.optional_integer_type(None), # through an absent value
+                    self.optional_integer_type(None).__class__): # through the class of an absent value
+            with self.subTest(obj=obj):
+                y = obj.decode(encoded_value)
+                self.assertEqual(y, 3)
+                self.assertIsInstance(y, xdr.Int32)
+                self.assertIsInstance(y, self.optional_integer_type)
+                self.assertIsInstance(y, xdr.Optional)
+        
+    def test_absent_value_decoding(self):
+        encoded_value = xdr.FALSE.encode()  # @UndefinedVariable
+        for obj in (self.optional_integer_type, # direct instantiation
+                    self.optional_integer_type(3), # through a present value
+                    self.optional_integer_type(3).__class__, # through the class of a present value
+                    self.optional_integer_type(None), # through an absent value
+                    self.optional_integer_type(None).__class__): # through the class of an absent value
+            with self.subTest(obj=obj):
+                y = obj.decode(encoded_value)
+                self.assertEqual(y, None)
+                self.assertNotIsInstance(y, xdr.Int32)
+                self.assertIsInstance(y, xdr.Void)
+                self.assertIsInstance(y, self.optional_integer_type)
+                self.assertIsInstance(y, xdr.Optional)
+        
     def test_optional_decorator_is_idempotent(self):
         new_optional_type = xdr.Optional(self.optional_integer_type)
         self.assertIs(new_optional_type, self.optional_integer_type)
     
     def test_void_cannot_be_made_optional(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             _ = xdr.Optional(xdr.Void)
+    
+    def test_cannot_create_optional_classes_through_derived_optional_class(self):
+        self.assertRaises(TypeError, self.optional_integer_type, xdr.Float32)
     
     def test_verify_class_hierarchy(self):
         x = self.optional_integer_type(3)

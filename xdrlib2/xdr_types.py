@@ -47,11 +47,11 @@ _guard = object()
 
 def encode(obj):
     '''Returns the XDR-encoded representation of `obj`'''
-    return obj.to_bytes()
+    return obj._encode()
 
 def decode(cls, source):
     '''Decodes the XDR-encoded `source`, and returns the corresponding `cls` instance.'''
-    return cls.from_bytes(source)
+    return cls.decode(source)
     
     
 def _unpack(fmt, size, source):
@@ -103,7 +103,7 @@ class _MetaXdrObject(type):
         # Therefore we use an OrderedDict as class __dict__
         return OrderedDict()
     
-    
+
 class XdrType(metaclass=_MetaXdrObject):
     @classmethod
     def _customize_class(cls, dct):
@@ -119,12 +119,25 @@ class XdrType(metaclass=_MetaXdrObject):
     @classmethod
     def _validate_arguments(cls, *args, **kwargs):
         raise NotImplementedError
+
+    class _Encoder:
+        def __get__(self, obj, cls):
+            if obj is None:
+                return cls._convert_and_encode
+            else:
+                return obj._encode
+                    
+    encode = _Encoder()
     
-    def to_bytes(self):
+    @classmethod
+    def _convert_and_encode(cls, obj):
+        return cls(obj)._encode()
+    
+    def _encode(self):
         raise NotImplementedError
 
     @classmethod
-    def from_bytes(cls, source):
+    def decode(cls, source):
         obj, source = cls._extract(source)
         if len(source) > 0:
             raise ValueError('Decoding error: too much data')
@@ -154,7 +167,7 @@ class Void(XdrType):
     def _validate_arguments(cls):
         pass
 
-    def to_bytes(self):
+    def _encode(self):
         return b''
 
     @classmethod
@@ -171,6 +184,7 @@ class Optional(XdrType):
     
     The class Optional is primarily used as a decorator to create an optional XDR type.
     >>> opt_cls = Optional(Int32)
+    >>>
     
     The name of the optional class is the name of the original class,
     prepended with an asterix '*'
@@ -241,13 +255,13 @@ class Optional(XdrType):
         
         if cls._is_instantiated_as_absent(*args, **kwargs):
             return Void.__new__(cls._absent_class)
-        return super().__new__(cls._present_class, *args, **kwargs)
+        return cls._original_class.__new__(cls._present_class, *args, **kwargs)
     
-    def to_bytes(self):
+    def _encode(self):
         if isinstance(self, Void):
-            return FALSE.to_bytes()  # @UndefinedVariable
+            return FALSE._encode()  # @UndefinedVariable
         else:
-            return TRUE.to_bytes() + super().to_bytes() # @UndefinedVariable
+            return TRUE._encode() + super()._encode() # @UndefinedVariable
     
     @classmethod
     def _extract(cls, source):
@@ -278,7 +292,7 @@ class Optional(XdrType):
     @classmethod
     def _make_optional_class(cls, original_class):
         if issubclass(original_class, Void):
-            raise ValueError('Void (sub)class cannot be made optional')
+            raise TypeError('Void (sub)class cannot be made optional')
         if issubclass(original_class, Optional):
             return original_class
         optional_class = cls.__class__('*'+original_class.__name__, (Optional,), {})
@@ -321,7 +335,7 @@ class Atomic(XdrType):
     def _validate_arguments(cls, *args, **kwargs):
         pass
     
-    def to_bytes(self):
+    def _encode(self):
         return _pad(struct.pack(self._fmt, self))
 
     @classmethod
@@ -568,7 +582,7 @@ class Float128(Float):
         v._encoded = b''
         return v
     
-    def to_bytes(self):
+    def _encode(self):
         if not self._encoded:
             # The 'struct' module does not support quadruple-precision encoding.
             # The best we can do is encode it as double-precision,
@@ -589,7 +603,7 @@ class Float128(Float):
             number >>= 11
             sign = number & 1
                 
-            # Ca;culate the sign, exponent, and fractional part for the quadruple-precision representation
+            # Calculate the sign, exponent, and fractional part for the quadruple-precision representation
             # Sign bit is the same
             # Exponent for double-precision is 11 bits, biased by 1023
             # Exponent for quadruple-precision is 15 bits, biased by 16383.
@@ -604,7 +618,7 @@ class Float128(Float):
             elif exponent == 0:
                 # Either zero or subnormal numbers.
                 if fraction:
-                    # At least one non-zero bit. This is aubnormal number.
+                    # At least one non-zero bit. This is a aubnormal number.
                     # The absolute value is 2**(-1022) * 0.<fraction>.
                     # or equivalently 2**(-1022) * fraction * 2**(-52)
                     # We need to convert this to a new exponent and fraction value
@@ -650,7 +664,7 @@ class Float128(Float):
     @classmethod
     def _extract(cls, source):
         # Use the first 16 bytes of the source.
-        # Mimic the bahaviour of struct.unpack if there are not enough bytes.
+        # Mimic the behavior of struct.unpack if there are not enough bytes.
         buf, source = _split_and_remove_padding(source, 16)
                     
         # Construct a big integer from the bytes
@@ -673,9 +687,9 @@ class Float128(Float):
             else:
                 v = '-nan' if sign else 'nan'
         elif exponent == 0:
-            # Either zero or subnormal.
-            # But even the largeust subnormal numberin quadruple-precision
-            # is to small to represent in double-precision
+            # Either zero or sub-normal.
+            # But even the largest sub-normal number in quadruple-precision
+            # is too small to represent in double-precision
             v = -0.0 if sign else 0.0
         else:
             # truncate fraction to fit in 52 bits
@@ -693,7 +707,7 @@ class Float128(Float):
                     fraction >>= -exponent
                     v = (-1 if sign else 1) * fraction * 2**(-1022-52)
                 else:
-                    # Too small for a subnormal number in double-precision
+                    # Too small for a sub-normal number in double-precision
                     v = -0.0 if sign else 0.0
             else:
                 # This fits in a regular double-precision number
@@ -848,7 +862,7 @@ class FixedOpaque(FixedSequence, Opaque):
         self._encoded_size = self._size
         super().__init__(data)
         
-    def to_bytes(self):
+    def _encode(self):
         return _pad(bytes(self))
     
     @classmethod
@@ -886,7 +900,7 @@ class _VarOpaque(VarSequence, Opaque):
     def _encoded_size(self):
         return _padded_size(Int32u._encoded_size) + len(self)
     
-    def to_bytes(self):
+    def _encode(self):
         return encode(Int32u(len(self))) + _pad(bytes(self))
     
     @classmethod
@@ -964,7 +978,7 @@ class FixedArray(FixedSequence, Array):
     def _encoded_size(self):
         return sum(x._encoded_size for x in self)
     
-    def to_bytes(self):
+    def _encode(self):
         return b''.join(encode(x) for x in self)
     
     @classmethod
@@ -1006,7 +1020,7 @@ class VarArray(VarSequence, Array):
     def _encoded_size(self):
         return _padded_size(Int32u._encoded_size) + sum(x._encoded_size for x in self)
     
-    def to_bytes(self):
+    def _encode(self):
         return encode(Int32u(len(self))) + b''.join(encode(x) for x in self)
     
     @classmethod
@@ -1103,7 +1117,7 @@ class Structure(XdrType):
     def _make_class_dictionary(cls, *args):
         return OrderedDict(args)
 
-    def to_bytes(self):
+    def _encode(self):
         return b''.join(encode(v) for v in self._members.values())
 
     @classmethod
@@ -1259,7 +1273,7 @@ class Union(XdrType, _UnionTuple):
     def _make_class_dictionary(cls, **kwargs):
         return kwargs
 
-    def to_bytes(self):
+    def _encode(self):
         return encode(self.switch) + encode(self.case)
     
     @classmethod
