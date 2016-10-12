@@ -61,6 +61,14 @@ class TestOptionalTypes(unittest.TestCase):
         self.assertTupleEqual(type(x).__bases__, (self.optional_integer_type, xdr.Int32))
         self.assertTupleEqual(type(y).__bases__, (self.optional_integer_type, xdr.Void))
 
+    def test_optional_fixed_length(self):
+        optType = xdr.Optional(xdr.FixedOpaque.typedef(size=5))
+        byte_str = b'\0\xff\xab\xcd\x01'
+        yes = optType(byte_str)
+        no = optType()
+        self.assertIsInstance(yes, optType)
+        self.assertEqual(yes, byte_str)
+        self.assertEqual(no, None)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

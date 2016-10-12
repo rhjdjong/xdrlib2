@@ -66,7 +66,27 @@ class Test(unittest.TestCase):
                 self.assertIsInstance(y, self.optional_integer_type)
                 self.assertIsInstance(y, xdr.Optional)
         
-
+    def test_optional_arrays(self):
+        for basecls, typ in ((xdr.FixedOpaque, None),
+                             (xdr.VarOpaque, None),
+                             (xdr.String, None),
+                             (xdr.FixedArray, xdr.Int32),
+                             (xdr.VarArray, xdr.Int32)):
+            with self.subTest(basecls=basecls):
+                if typ is None:
+                    subcls = basecls.typedef(size=5)
+                else:
+                    subcls = basecls.typedef(size=5, type=typ)
+                optType = xdr.Optional(subcls)
+                yes = optType([1, 2, 3, 4, 5])
+                no = optType()
+                y_b = yes.encode()
+                n_b = no.encode()
+                self.assertEqual(y_b, xdr.TRUE.encode() + subcls.encode(yes)) # @UndefinedVariable
+                self.assertEqual(n_b, xdr.FALSE.encode()) # @UndefinedVariable
+                self.assertEqual(optType.decode(y_b), yes)
+                self.assertEqual(optType.decode(n_b), no)
+                
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

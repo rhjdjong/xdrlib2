@@ -36,37 +36,14 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertIsInstance(x, self.FixedLengthOpaque)
         self.assertEqual(x, blob)
 
-    def test_fixed_length_opaque_default_value(self):
-        x = self.FixedLengthOpaque()
-        self.assertEqual(x, b'\0\0\0\0\0')
-
-    def test_fixed_length_opaque_requries_correctly_sized_arguments(self):
-        self.assertRaises(ValueError, self.FixedLengthOpaque, b'123')
-        self.assertRaises(ValueError, self.FixedLengthOpaque, b'1234567890')
-    
     def test_fixed_length_opaque_decode_errors(self):
         self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'1234' + _padding(4))
         self.assertRaises(ValueError, decode, self.FixedLengthOpaque, b'12345678' + _padding(8))
     
-    def test_fixed_opaque_class_construction(self):
-        my_cls = FixedOpaque(size=5)
-        self.assertTrue(issubclass(my_cls, FixedOpaque))
-        self.assertTrue(FixedOpaque in my_cls.__mro__)
-        byte_str = b'\0\xff\xab\xcd\x01'
-        blob = my_cls(byte_str)
-        self.assertIsInstance(blob, bytearray)
-        self.assertIsInstance(blob, my_cls)
-        self.assertEqual(blob, byte_str)
-        bp = encode(blob)
-        self.assertEqual(bp, byte_str + _padding(5))
-        self.assertEqual(decode(my_cls, bp), blob)
     
     def test_fixed_opaque_with_size_0(self):
-        my_cls = FixedOpaque(size=0)
+        my_cls = xdr.FixedOpaque.typedef(size=0)
         blob = my_cls(())
-        self.assertIsInstance(blob, bytearray)
-        self.assertIsInstance(blob, my_cls)
-        self.assertEqual(blob, b'')
         bp = encode(blob)
         self.assertEqual(bp, b'')
         self.assertEqual(decode(my_cls, bp), blob)
@@ -100,7 +77,7 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertRaises(ValueError, blob.extend, b'no')
         with self.assertRaises(ValueError):
             blob += b'no way'
-    
+
     def test_optional_fixed_length(self):
         optType = Optional(self.FixedLengthOpaque)
         byte_str = b'\0\xff\xab\xcd\x01'
@@ -115,12 +92,6 @@ class TestFixedOpaque(unittest.TestCase):
         self.assertEqual(n_b, encode(FALSE)) # @UndefinedVariable
         self.assertEqual(decode(optType, y_b), yes)
         self.assertEqual(decode(optType, n_b), no)
-        
-    def test_explicit_subclassing(self):
-        subcls = FixedOpaque.typedef(size=5)
-        x = subcls(b'12345')
-        self.assertIsInstance(x, FixedOpaque)
-        self.assertEqual(encode(x), b'12345' + _padding(5))
         
 
 class TestVarOpaque(unittest.TestCase):
