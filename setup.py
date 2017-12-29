@@ -9,7 +9,7 @@ from setuptools.command.test import test as TestCommand
 import os
 import sys
 
-import xdrlib2
+__version__ = "0.1.0"
 
 # Get the long description from the relevant file
 def read_long_description(*filenames, **kwargs):
@@ -47,7 +47,7 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version = xdrlib2.__version__,
+    version = __version__,
 
     description='Xdrlib2 package',
     long_description=long_description,
@@ -86,7 +86,8 @@ setup(
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=find_packages(),
+    packages=find_packages('src'),
+    package_dir={'': 'src'},
 
     # List run-time dependencies here.  These will be installed by pip when your
     # project is installed. For an analysis of "install_requires" vs pip's
