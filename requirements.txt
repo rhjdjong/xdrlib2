@@ -3,4 +3,5 @@
 
 # Requirements for developing this package
 docutils
-
+sphinx
+sphinx_rtd_theme
