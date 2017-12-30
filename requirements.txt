@@ -1,0 +1,6 @@
+# Include the requirements for testing
+-r test-requirements.txt
+
+# Requirements for developing this package
+docutils
+
