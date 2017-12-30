@@ -5,6 +5,7 @@ python:
 
 install:
  - "pip install -r test-requirements.txt"
+ - "pip install ."
 
 script:
  - "python setup.py test"
