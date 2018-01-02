@@ -1,12 +1,10 @@
-'''
-Created on 24 dec. 2015
+# Copyright (c) 2018 Ruud de Jong
+# This file is part of the xdrlib2 project which is released under the MIT license.
+# See https://github.com/rhjdjong/xdrlib2 for details.
 
-@author: Ruud de Jong
-'''
 
 from setuptools import setup, find_packages  # Always prefer setuptools over distutils
 from setuptools.command.test import test as TestCommand
-import os
 import sys
 
 __version__ = "0.1.0"
