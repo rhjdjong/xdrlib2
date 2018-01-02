@@ -7,7 +7,7 @@ from setuptools import setup, find_packages  # Always prefer setuptools over dis
 from setuptools.command.test import test as TestCommand
 import sys
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Get the long description from the relevant file
 def read_long_description(*filenames, **kwargs):
