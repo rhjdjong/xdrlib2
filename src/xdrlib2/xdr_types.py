@@ -3,7 +3,7 @@
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
 import struct
-
+import math
 
 class _Bounded(int):
     def __new__(cls, value=0):
@@ -43,3 +43,27 @@ class Int64u(_Bounded):
     min = 0
     max = 2**64
     fmt = '>Q'
+
+
+class Float32(float):
+    def encode(self):
+        return struct.pack('>f', self)
+
+class Float64(float):
+    def encode(self):
+        return struct.pack('>d', self)
+
+class Float128(float):
+    def encode(self):
+        signbit = 1 if math.copysign(1, self) < 0 else 0
+        if self == 0.0:
+            exponent = 0
+            fraction = 0
+        else:
+            m, p = math.frexp(self)
+            m = abs(m)
+            fraction = round((2*m - 1) * 2**112)
+            exponent = p + 16382
+        number = (signbit << 127) | (exponent << 112) | fraction
+        return number.to_bytes(16, 'big')
+
