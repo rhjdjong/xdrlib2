@@ -49,14 +49,33 @@ class Float32(float):
     def encode(self):
         return struct.pack('>f', self)
 
+    @classmethod
+    def decode(cls, packed):
+        value = struct.unpack('>f', packed)[0]
+        return cls(value)
+
 class Float64(float):
     def encode(self):
         return struct.pack('>d', self)
 
+    @classmethod
+    def decode(cls, packed):
+        value = struct.unpack('>d', packed)[0]
+        return cls(value)
+
+
 class Float128(float):
     def encode(self):
         signbit = 1 if math.copysign(1, self) < 0 else 0
-        if self == 0.0:
+        if math.isinf(self):
+            exponent = 32767
+            fraction = 0
+        elif math.isnan(self):
+            exponent = 32767
+            packed_double = struct.pack('>d', self)
+            fraction = packed_double & ((1<<52) - 1)
+            fraction <<= 60
+        elif self == 0.0:
             exponent = 0
             fraction = 0
         else:
@@ -66,4 +85,29 @@ class Float128(float):
             exponent = p + 16382
         number = (signbit << 127) | (exponent << 112) | fraction
         return number.to_bytes(16, 'big')
+
+    @classmethod
+    def decode(cls, packed):
+        number = int.from_bytes(packed, 'big')
+        fraction = number & ((1<<112) - 1)
+        number >>= 112
+        exponent = number & ((1<<15) - 1)
+        number >>= 15
+        signbit = number & 1
+
+        if exponent == 32765 and fraction != 0:
+            float_exponent = 2047
+            float_fraction = fraction >> 60
+            if float_fraction == 0:
+                float_fraction |= 1
+            float_number = (signbit << 63) | (float_exponent << 52) | float_fraction
+            packed_float = float_number.to_bytes(8, 'big')
+            value = struct.unpack('>d', packed_float)[0]
+        if exponent > 17406:
+            value = float('inf') if signbit == 0 else float('-inf')
+        elif exponent < 15361:
+            value = (1 - 2*signbit) * fraction * 2**(-1022-112)
+        else:
+            value = (1 - 2*signbit) * (1 + fraction * 2**-112) * 2**(exponent-16383)
+        return cls(value)
 

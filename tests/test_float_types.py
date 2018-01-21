@@ -52,7 +52,7 @@ def calculate_representation(cls, value):
     if math.isinf(value):
         exponent = max_exponent
         fraction = 0
-    if math.isnan(value):
+    elif math.isnan(value):
         exponent = max_exponent
         packed_value = struct.pack('>d', value)
         double_fraction_size = binary_layout[xdrlib.Float64]['f']
@@ -61,7 +61,7 @@ def calculate_representation(cls, value):
             fraction >>= (double_fraction_size - fraction_size)
         elif fraction_size > double_fraction_size:
             fraction <<= (fraction_size - double_fraction_size)
-    if value == 0.0:
+    elif value == 0.0:
         exponent = 0
         fraction = 0
     else:
@@ -89,8 +89,27 @@ def test_default_instantiation(xdrtype):
 @pytest.mark.parametrize("value", [
     0.0, -0.5, 0.375, -0.1
 ])
-def test_encoding_of_regular_values(xdrtype, value):
-    x = xdrtype(value)
+def test_encoding_and_decoding_of_regular_values(xdrtype, value):
+    if xdrtype == xdrlib.Float32:
+        value = struct.unpack('>f', struct.pack('>f', value))[0]
     s, e, f = calculate_representation(xdrtype, value)
     packed_data = build_packed_data(xdrtype, s, e, f)
-    assert x.encode() == packed_data
+
+    # Encoding-decoding roundtrip
+    x = xdrtype(value)
+    p = x.encode()
+    assert p == packed_data
+    y = xdrtype.decode(p)
+    assert isinstance(y, xdrtype)
+    assert x == y
+
+    # Decoding-encoding roundtrip
+    x = xdrtype.decode(packed_data)
+    assert isinstance(x, xdrtype)
+    assert x == value
+    p = x.encode()
+    assert p == packed_data
+
+
+def test_encoding_and_decoding_underflow_values():
+    # to be provided
