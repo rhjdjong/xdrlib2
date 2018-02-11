@@ -80,11 +80,15 @@ examples = {
     xdrlib.Float64,
     xdrlib.Float128
 ])
-def test_instantiation(xdrtype):
+def test_default_instantiation(xdrtype):
     n = xdrtype()
     assert isinstance(n, xdrtype)
     assert n == 0.0
     assert n == 0
+    packed = n.encode()
+    assert len(packed) == (1 + xdrtype._exponent_size + xdrtype._fraction_size) / 8
+    assert all(b == 0 for b in packed)
+    assert xdrtype.decode(packed) == n
 
 @pytest.mark.parametrize('xdrtype', [
     xdrlib.Float32,
@@ -135,14 +139,6 @@ def verify_number(xdrtype, signbit, exponent, fraction, encoded, hex_string):
     assert n.is_subnormal == (exponent == 0 and fraction != 0)
     assert n.is_infinite == (exponent == n._max_exponent and fraction == 0)
 
-
-@pytest.mark.parametrize("xdrtype", [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128]
-)
-def test_default_instantiation(xdrtype):
-    assert xdrtype() == 0.0
 
 # @pytest.mark.parametrize("value", [
 #     2**(-1023-x) for x in range(52)
