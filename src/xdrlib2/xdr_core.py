@@ -3,8 +3,10 @@
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
 from functools import singledispatch, reduce
+import numbers
 import math
-from decimal import Decimal, localcontext, DefaultContext, InvalidOperation, ROUND_HALF_EVEN
+import re
+
 import struct
 
 class _XDR_type:
@@ -43,16 +45,67 @@ class _XDR_integer(_XDR_type, int):
         return cls(v)
 
     def __repr__(self):
-        return f'{self.__class__.__name__:s}({super().__repr__(self):s})'
+        return f'{self.__class__.__name__:s}({super().__repr__():s})'
 
 
-class _XDR_float(_XDR_type, Decimal):
+def _fraction_bits(dec_frac, limit):
+    while dec_frac:
+        dec_frac *= 2
+        if dec_frac >= limit:
+            dec_frac -= limit
+            yield 1
+        else:
+            yield 0
+    while True:
+        yield 0
+
+def _bin_fraction_from_dec_fraction_string(fraction, bit_generator, nr_of_bits):
+    return reduce(lambda x, y: (x << 1) + y,
+                  (next(bit_generator) for _ in range(nr_of_bits)), fraction)
+
+def _div_round_to_even(number, divisor):
+    f, r = divmod(number, divisor)
+    threshold = divisor / 2
+    if r > threshold:
+        f += 1
+    if r == threshold:
+        f += f % 2
+    return f
+
+@singledispatch
+def _init_float(value, self):
+    raise TypeError(f"{self.__class__.__name__:s} argument must be a string or a number, "
+                    f"not '{value.__class__.__name__:s}'")
+
+@_init_float.register(str)
+def _init_float_str(value, self):
+    self._init_from_str(value)
+
+@_init_float.register(bytes)
+def _init_float_bytes(value, self):
+    self._init_from_str(value.decode('utf8'))
+
+@_init_float.register(float)
+def _init_float_float(value, self):
+    self._init_from_number(value)
+
+@_init_float.register(int)
+def _init_float_int(value, self):
+    self._init_from_number(value)
+
+class _XDR_float(_XDR_type, float):
     _fraction_size = None
+    _fraction_mask = None
     _exponent_size = None
     _max_exponent = None
     _exponent_bias = None
     _packed_size = None
-    _decimal_precision = None
+    _spec_re = re.compile(r'^[+-]?(?:(?P<inf>inf(?:inity)?)|(?P<nan>nan)(?P<payload>\d*))$')
+    _nstr_re = re.compile(r'^[+-]?(?P<intpart>\d*)\.(?P<decpart>\d*)(?:(?P<exp>[+-]?\d+))$')
+    _hex_str_re = re.compile(r'^(?P<sign>[+-]?)'
+                             r'(?:0x)?(?P<intpart>[0-9A-Fa-f]+)'
+                             r'(?:\.(?P<fraction>[0-9A-Fa-f]+))?'
+                             r'(?:p(?P<exponent>[+-]?\d+))?$')
 
     def __init_subclass__(cls, exponent_size=0, fraction_size=0, **kwargs):
         if exponent_size < 1:
@@ -60,6 +113,13 @@ class _XDR_float(_XDR_type, Decimal):
         if fraction_size < 1:
             raise ValueError(f'Float subclass requires fraction_size >= 1, got {fraction_size:d}')
         super().__init_subclass__(**kwargs)
+
+        bit_size = 1 + exponent_size + fraction_size
+        packed_size = bit_size // 8
+        if bit_size != 8 * packed_size:
+            raise ValueError(f'Sign bit, exponent size {exponent_size:d} and fraction size {fraction_size:d} '
+                             f'together are not a multiple of 8 bits')
+        cls._packed_size = packed_size
 
         cls._signbit_class = type('Signbit', (_XDR_integer,), {}, size=1)
         cls._exponent_class = type('Exponent', (_XDR_integer,), {}, size=exponent_size)
@@ -70,91 +130,160 @@ class _XDR_float(_XDR_type, Decimal):
         cls._fraction_mask = (1 << fraction_size) - 1
         cls._max_exponent = (1 << exponent_size) - 1
         cls._exponent_bias = cls._max_exponent >> 1
-        bit_size = 1 + exponent_size + fraction_size
-        cls._packed_size = bit_size // 8 + (1 if bit_size % 8 else 0)
-        cls._decimal_precision = 1 + math.ceil(fraction_size * math.log10(2.0))
-        with localcontext(DefaultContext) as ctx:
-            ctx.prec = cls._decimal_precision
-            ctx.rounding = ROUND_HALF_EVEN
-            cls._log2 = Decimal('2.0').log10()
 
+    def __new__(cls, value=0.0):
+        instance = super().__new__(cls, value)
+        instance.signbit = 0
+        instance.exponent = 0
+        instance.fraction = 0
+        return instance
 
-    def __new__(cls, value=0):
-        value_error_msg = f'could not convert {value.__class__.__name__:s} to {cls.__name__:s}: {value!r}'
-        type_error_msg = f'conversion from {value.__class__.__name__:s} to {cls.__name__:s} is not supported'
+    def __init__(self, value=0.0):
+        _init_float(value, self)
 
-        with localcontext(DefaultContext) as ctx:
-            ctx.prec = cls._decimal_precision
-            ctx.rounding = ROUND_HALF_EVEN
+    def _init_from_number(self, value):
+        hex_str = super().hex()
+        if 'inf' in hex_str or 'nan' in hex_str:
+            self.signbit = 1 if hex_str.startswith('-') else 0
+            self.exponent = self._max_exponent
+            self.fraction = 0 if 'inf' in hex_str else 1 << (self._fraction_size - 1)
+            return
 
-            if isinstance(value, tuple):
-                signbit, exponent, fraction = value
-                sign_str = f'{"-" if signbit else ""}'
-                if exponent == cls._max_exponent:
-                    if fraction == 0:
-                        instance = super().__new__(cls, f'{sign_str:s}Infinity')
-                    else:
-                        instance = super().__new__(cls, f'{sign_str:s}NaN{fraction:d}')
-                elif exponent == 0:
-                    if fraction == 0:
-                        instance = super().__new__(cls, f'{sign_str:s}0.0')
-                    else:
-                        instance = (Decimal(f'{sign_str:s}{fraction:d}')
-                            * (Decimal(2) ** Decimal(1-cls._exponent_bias)))
-                else:
-                    instance = (Decimal(f'{sign_str:s}1{fraction:d}')
-                        * (Decimal(2) ** Decimal(exponent - cls._exponent_bias)))
+        m = self._hex_str_re.match(hex_str)
+        if not m:
+            raise ValueError(f"Cannot parse hex float representation: '{hex_str:s}'")
+
+        sign_str = m['sign']
+        sign = 1 if sign_str == '-' else 0
+        self.signbit = sign
+
+        intpart = int(m['intpart'], 16)
+        fraction_str = m['fraction']
+        fraction = int(fraction_str, 16) if fraction_str else 0
+        n_fraction_bits = len(fraction_str) if fraction_str else 0
+        exp_str = m['exponent']
+        exp = int(exp_str) if exp_str else 0
+
+        if intpart == 0 and fraction == 0:
+            self.fraction = 0
+            self.exponent = 0
+        else:
+            frac_denominator = 2**self._fraction_size
+            if intpart > 0:
+                bits_to_shift = intpart.bit_length() - 1
+                leading_fraction_part = intpart & ((1 << bits_to_shift) - 1)
+                fraction = leading_fraction_part << n_fraction_bits + fraction
+                exp += bits_to_shift
+                n_fraction_bits += bits_to_shift
+
+            if n_fraction_bits > self._fraction_size:
+                fraction = _div_round_to_even(fraction, 1<<(n_fraction_bits - self._fraction_size))
+            elif n_fraction_bits < self._fraction_size:
+                fraction <<= self._fraction_size - n_fraction_bits
+            if fraction >= frac_denominator:
+                fraction >>= 1
+                exp += 1
+            self.fraction = fraction
+            self.exponent = exp
+
+    def _init_from_str(self, value):
+        value = value.strip().replace('_', '')
+
+        self.signbit = 1 if value.startswith('-') else 0
+
+        m = self._spec_re.match(value.lower())
+        if m:
+            self.exponent = self._max_exponent
+            if m['inf']:
+                self.fraction = 0
             else:
-                # Catch unicode errors
-                if isinstance(value, str):
-                    value = value.encode('utf8').decode('utf8')
-                try:
-                    instance = super().__new__(cls, value)
-                except TypeError:
-                    raise TypeError(type_error_msg)
-                except InvalidOperation:
-                    raise ValueError(value_error_msg)
-                signbit = 1 if instance.is_signed() else 0
-                sign_str = f'{"-" if signbit else ""}'
+                payload = m['payload']
+                self.fraction = payload if payload else 1 << (self._fraction_size - 1)
+            return
 
-                if instance.is_infinite():
-                    exponent = cls._max_exponent
-                    fraction = 0
-                elif instance.is_nan():
-                    exponent = 0
-                    fraction = reduce(lambda x, y: 10*x + y, instance.as_tuple().digits, 0) & cls._fraction_mask
-                elif instance.is_zero():
-                    exponent = 0
-                    fraction = 0
+        m = self._nstr_re.match(value)
+        if not m:
+            raise ValueError(f"Oops. Cannot parse '{value:s}'. This should not happen.")
+
+        intpart_str = m['intpart']
+        decpart_str = m['decpart']
+        intpart = int(intpart_str) if intpart_str else 0
+        decpart = int(decpart_str) if decpart_str else 0
+
+        if intpart == 0 and decpart == 0:
+            self.exponent = 0
+            self.fraction = 0
+            return
+
+        exp_str = m['exp']
+        exp = int(exp_str) if exp_str else 0
+        if exp > 0:
+            intpart_str = intpart_str + decpart_str[:exp] + '0'*(exp - len(decpart_str))
+            decpart_str = decpart_str[exp:]
+        elif exp < 0:
+            decpart_str = '0'*(-exp - len(intpart_str)) + intpart_str[exp:] + decpart_str
+            intpart_str = intpart_str[:exp]
+
+        intpart = int(intpart_str) if intpart_str else 0
+        decpart = int(decpart_str) if decpart_str else 0
+        dec_denominator = 10 ** len(decpart_str)
+
+        fraction = 0
+        bin_exp = 0
+        bin_denominator = 1 << self._fraction_size
+        if intpart > 0:
+            bin_exp = intpart.bit_length() - 1
+            fraction = intpart & ((1 << bin_exp) - 1)
+        if decpart > 0:
+            if intpart > 0:
+                if bin_exp < self._fraction_size:
+                    n_bits = self._fraction_size - bin_exp
+                    fraction += _div_round_to_even(decpart << n_bits, dec_denominator)
                 else:
-                    # Calculate exponent and mantissa such that
-                    # instance == mantissa * 2**exponent with 1 <= mantissa < 2
-                    exponent = math.floor(abs(instance.log10()/cls._log2))
-                    mantissa = instance * (Decimal(2) ** Decimal(-exponent))
-                    if exponent > cls._exponent_bias:
-                        # Overflow --> infinite
-                        instance = super().__new__(cls, ('{sign_str:s}Infinity'))
-                        exponent = cls._max_exponent
-                        fraction = 0
-                    else:
-                        if 1 - cls._exponent_bias <= exponent <= cls._exponent_bias:
-                            # Nominal number
-                            exponent = exponent + cls._exponent_bias
-                            fraction = round(mantissa * Decimal(2**cls._fraction_size)) & cls._fraction_mask
-                        else:
-                            # Subnominal or underflow
-                            exponent = 0
-                            exponent_delta = 1 - cls._exponent_bias - exponent
-                            if exponent_delta <= cls._fraction_size:
-                                # Subnominal
-                                fraction = round(mantissa * Decimal(2**(cls._fraction_size - exponent_delta)))
-                            else:
-                                # Underflow
-                                fraction = 0
+                    fraction = _div_round_to_even(fraction, bin_denominator)
+            else:
+                bin_exp = decpart.bit_length() - dec_denominator.bit_length()
+                fraction = decpart << -bin_exp
+                while fraction < dec_denominator:
+                    bin_exp -= 1
+                    fraction <<= 1
+                fraction -= dec_denominator
+                fraction <<= self._fraction_size
+                fraction = _div_round_to_even(fraction, dec_denominator)
+        if fraction >= bin_denominator:
+            fraction >>= 1
+            bin_exp += 1
 
+        if bin_exp > self._exponent_bias:
+            self.exponent = self._max_exponent
+            self.fraction = 0
+        elif bin_exp < 1 - self._exponent_bias:
+            self.exponent = 0
+            fraction = (1 << self._fraction_size) + fraction
+            fraction = _div_round_to_even(fraction, 1 << (1 - self._exponent_bias - bin_exp))
+            if fraction >= bin_denominator:
+                fraction >>= 1
+                self.exponent = 1
+            self.fraction = fraction
+        else:
+            self.exponent = bin_exp + self._exponent_bias
+            self.fraction = fraction
+
+    @classmethod
+    def raw(cls, signbit, exponent, fraction):
+        sign = -1 if signbit else 1
+        if exponent == cls._max_exponent:
+            sign_str = '-' if signbit else ''
+            value_str = sign_str + ('inf' if exponent == 0 else 'nan')
+            instance = super().__new__(cls, value_str)
+        elif exponent == 0:
+            instance = super().__new__(cls, sign * fraction * 2**(1 - cls._exponent_bias - cls._fraction_size))
+        else:
+            instance = super().__new__(cls, sign * (1 + fraction * 2**-cls._fraction_size)
+                                            * 2**(exponent - cls._exponent_bias))
         instance.signbit = signbit
-        instance.exponent = exponent
         instance.fraction = fraction
+        instance.exponent = exponent
         return instance
 
     @property
@@ -197,7 +326,8 @@ class _XDR_float(_XDR_type, Decimal):
         exponent = packed_integer & cls._max_exponent
         packed_integer >>= cls._exponent_size
         signbit = packed_integer & 1
-        return cls((signbit, exponent, fraction))
+        return cls.raw(signbit, exponent, fraction)
+
 
     def hex(self):
         shift_size = {0: 0, 1: 3, 2: 2, 3: 1}[self._fraction_size % 4]

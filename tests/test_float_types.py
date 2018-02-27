@@ -31,10 +31,30 @@ def test_default_instantiation(xdrtype):
     xdrlib.Float64,
     xdrlib.Float128
 ])
-def test_general_stuff(xdrtype):
-    assert xdrtype(3.14) == 3.14
-    assert xdrtype(314) == 314.0
-    assert xdrtype("  3.14  ") == Decimal('3.14')
+@pytest.mark.parametrize('param,value', [
+    (-3.14, -3.14),
+    (314, 314.0),
+    ('  -3.14  ', '-3.14'),
+    ('  \u0663.\u0661\u0664  ', '3.14'),
+    ('\N{EM SPACE}3.14\N{EN SPACE}', '3.14')
+])
+def test_normal_number_encoding_and_decoding(xdrtype, param, value):
+    n = xdrtype(param)
+    assert isinstance(n, xdrtype)
+    value = float(value)
+    assert n == value
+    packed = n.encode()
+    m = xdrtype.decode(packed)
+    assert isinstance(m, xdrtype)
+    assert m.encode() == packed
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_invalid_instantiation(xdrtype):
     with pytest.raises(ValueError):
         xdrtype("  0x3.1  ")
     with pytest.raises(ValueError):
@@ -53,7 +73,7 @@ def test_general_stuff(xdrtype):
         xdrtype("-.")
     with pytest.raises(TypeError) as exc_info:
         xdrtype({})
-    assert "conversion from dict to" in str(exc_info.value)
+    assert "not 'dict'" in str(exc_info.value)
 
     # Lone surrogate
     with pytest.raises(UnicodeError):
@@ -64,11 +84,74 @@ def test_general_stuff(xdrtype):
         xdrtype("-1.7d29")
     with pytest.raises(ValueError):
         xdrtype("3D-14")
-    assert xdrtype("  \u0663.\u0661\u0664  ") == Decimal('3.14')
-    assert xdrtype("\N{EM SPACE}3.14\N{EN SPACE}") == Decimal('3.14')
 
-    # extra long strings should not be a problem
-    xdrtype('.' + '1'*1000)
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_smallest_normal_number(xdrtype):
+#     with localcontext(xdrtype._decimal_context) as ctx:
+#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         smallest_normal = ctx.multiply(1 << xdrtype._fraction_size, power_of_two)
+#         n = xdrtype(smallest_normal)
+#         assert n.exponent == 1
+#         assert n.fraction == 0
+#         assert xdrtype.decode(n.encode()) == n
+#
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_largest_subnormal_number(xdrtype):
+#     with localcontext(xdrtype._decimal_context) as ctx:
+#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         largest_subnormal = ctx.multiply(xdrtype._fraction_mask, power_of_two)
+#         n = xdrtype(largest_subnormal)
+#         assert n.exponent == 0
+#         assert n.fraction == xdrtype._fraction_mask
+#         assert xdrtype.decode(n.encode()) == n
+#
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_smallest_subnormal_number(xdrtype):
+#     with localcontext(xdrtype._decimal_context) as ctx:
+#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         smallest_subnormal = ctx.multiply(1, power_of_two)
+#         n = xdrtype(smallest_subnormal)
+#         assert n.exponent == 0
+#         assert n.fraction == 1
+#         assert xdrtype.decode(n.encode()) == n
+#
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_rounding_of_half_smallest_subnormal_number(xdrtype):
+#     with localcontext(xdrtype._decimal_context) as ctx:
+#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         smallest_subnormal = ctx.multiply(1, power_of_two)
+#         n = xdrtype(ctx.divide(smallest_subnormal, 2))
+#         assert n.exponent == 0
+#         assert n.fraction == 1
+#         assert xdrtype.decode(n.encode()) == n
+#
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_less_than_half_smallest_subnormal_number_becomes_0(xdrtype):
+#     with localcontext(xdrtype._decimal_context) as ctx:
+#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         smallest_subnormal = ctx.multiply(1, power_of_two)
+#         n = xdrtype(ctx.divide(n, 3))
+#         assert n.is_zero()
 #
 #
 #
