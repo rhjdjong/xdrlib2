@@ -172,7 +172,7 @@ class _XDR_float(_XDR_type, float):
             if intpart > 0:
                 bits_to_shift = intpart.bit_length() - 1
                 leading_fraction_part = intpart & ((1 << bits_to_shift) - 1)
-                fraction = leading_fraction_part << n_fraction_bits + fraction
+                fraction += leading_fraction_part << n_fraction_bits
                 exp += bits_to_shift
                 n_fraction_bits += bits_to_shift
 
