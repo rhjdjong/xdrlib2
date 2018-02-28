@@ -160,7 +160,7 @@ class _XDR_float(_XDR_type, float):
         intpart = int(m['intpart'], 16)
         fraction_str = m['fraction']
         fraction = int(fraction_str, 16) if fraction_str else 0
-        n_fraction_bits = len(fraction_str) if fraction_str else 0
+        n_fraction_bits = 4 * len(fraction_str) if fraction_str else 0
         exp_str = m['exponent']
         exp = int(exp_str) if exp_str else 0
 
