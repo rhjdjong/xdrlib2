@@ -5,7 +5,7 @@
 import pytest
 import math
 import struct
-from decimal import Decimal, localcontext, ExtendedContext
+from decimal import Decimal, localcontext, ExtendedContext, ROUND_HALF_EVEN
 import xdrlib2 as xdrlib
 
 @pytest.mark.parametrize('xdrtype', [
@@ -24,6 +24,7 @@ def test_default_instantiation(xdrtype):
     unpacked = xdrtype.decode(packed)
     assert unpacked == n
     assert isinstance(unpacked, xdrtype)
+    assert unpacked.encode() == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -34,15 +35,11 @@ def test_default_instantiation(xdrtype):
 @pytest.mark.parametrize('param,value', [
     (-3.14, -3.14),
     (314, 314.0),
-    ('  -3.14  ', '-3.14'),
-    ('  \u0663.\u0661\u0664  ', '3.14'),
-    ('\N{EM SPACE}3.14\N{EN SPACE}', '3.14')
 ])
-def test_normal_number_encoding_and_decoding(xdrtype, param, value):
+def test_instantiation_from_number(xdrtype, param, value):
     n = xdrtype(param)
     assert isinstance(n, xdrtype)
-    value = float(value)
-    assert n == value
+    # assert n == value
     packed = n.encode()
     m = xdrtype.decode(packed)
     assert isinstance(m, xdrtype)
@@ -54,36 +51,176 @@ def test_normal_number_encoding_and_decoding(xdrtype, param, value):
     xdrlib.Float64,
     xdrlib.Float128
 ])
-def test_invalid_instantiation(xdrtype):
+@pytest.mark.parametrize('param,value', [
+    ('  -3.14  ', '-3.14'),
+    ('  \u0663.\u0661\u0664  ', '3.14'),
+    ('\N{EM SPACE}3.14\N{EN SPACE}', '3.14')
+])
+def test_instantiation_from_string(xdrtype, param, value):
+    n = xdrtype(param)
+    assert isinstance(n, xdrtype)
+    value = float(value)
+    # assert n == value
+    packed = n.encode()
+    m = xdrtype.decode(packed)
+    assert isinstance(m, xdrtype)
+    assert m.encode() == packed
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('param,value', [
+    (b'  -3.14  ', '-3.14'),
+    (b'  3.14  ', '3.14'),
+])
+def test_instantiation_from_bytes(xdrtype, param, value):
+    n = xdrtype(param)
+    assert isinstance(n, xdrtype)
+    value = float(value)
+    # assert n == value
+    packed = n.encode()
+    m = xdrtype.decode(packed)
+    assert isinstance(m, xdrtype)
+    assert m.encode() == packed
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('invalid', [
+    "  0x3.1  ",
+    "  -0x3.p-1  ",
+    "++3.14",
+    "-+3.14",
+    ".nan",
+    "+.inf",
+    ".",
+    "-.",
+    "-1.7d29",
+    "3D-14",
+])
+def test_invalid_instantiation_string_raises_ValueError(xdrtype, invalid):
     with pytest.raises(ValueError):
-        xdrtype("  0x3.1  ")
-    with pytest.raises(ValueError):
-        xdrtype("  -0x3.p-1  ")
-    with pytest.raises(ValueError):
-        xdrtype("++3.14")
-    with pytest.raises(ValueError):
-        xdrtype("-+3.14")
-    with pytest.raises(ValueError):
-        xdrtype(".nan")
-    with pytest.raises(ValueError):
-        xdrtype("+.inf")
-    with pytest.raises(ValueError):
-        xdrtype(".")
-    with pytest.raises(ValueError):
-        xdrtype("-.")
+        xdrtype(invalid)
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('invalid', [
+    {},
+    (),
+    [],
+    object(),
+])
+def test_invalid_instantiation_parameter_type_raises_TypeError(xdrtype, invalid):
     with pytest.raises(TypeError) as exc_info:
-        xdrtype({})
-    assert "not 'dict'" in str(exc_info.value)
+        xdrtype(invalid)
+    assert f"not '{invalid.__class__.__name__:s}'" in str(exc_info.value)
 
-    # Lone surrogate
-    with pytest.raises(UnicodeError):
-        xdrtype('\uD8F0')
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# @pytest.mark.parametrize('invalid', [
+#     '\uD8F0',
+# ])
+# def test_invalid_unicode_string_raises_UnicodeError(xdrtype, invalid):
+#     with pytest.raises(UnicodeError):
+#         xdrtype(invalid)
 
-    # check that we don't accept alternate exponent markers
-    with pytest.raises(ValueError):
-        xdrtype("-1.7d29")
-    with pytest.raises(ValueError):
-        xdrtype("3D-14")
+@pytest.mark.parametrize('value', [
+    float('-inf'),
+    ((1 << 24) - 1)*2**(127-23),
+    2**-126,
+    2**-127,
+    2**-149,
+    1.0,
+    -2.0,
+    0.0,
+    -0.0,
+    math.pi,
+    1/3,
+])
+def test_encoding_for_Float32(value):
+    n = xdrlib.Float32(value)
+    packed = struct.pack('>f', value)
+    assert n.encode() == packed
+    n2 = xdrlib.Float32.decode(packed)
+    assert n2.signbit == n.signbit
+    assert n2.exponent == n.exponent
+    assert n2.fraction == n.fraction
+
+
+@pytest.mark.parametrize('value', [
+    float('-inf'),
+    ((1 << 53) - 1)*2**(1022-52),
+    2**-1022,
+    2**-1022 - 2**-1074,
+    2**-1074,
+    1.0,
+    -2.0,
+    0.0,
+    -0.0,
+    math.pi,
+    1/3,
+])
+def test_encoding_for_Float64(value):
+    n = xdrlib.Float64(value)
+    packed = struct.pack('>d', value)
+    assert n.encode() == packed
+    n2 = xdrlib.Float64.decode(packed)
+    assert n2.signbit == n.signbit
+    assert n2.exponent == n.exponent
+    assert n2.fraction == n.fraction
+
+
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_maximum_value(xdrtype):
+#     with localcontext() as ctx:
+#             ctx.prec = xdrtype._fraction_size + 3
+#             ctx.rounding = ROUND_HALF_EVEN
+#             value = ctx.power(2, xdrtype._exponent_bias)
+#             fraction = 1 << (xdrtype._fraction_size)
+#             for i in range(xdrtype._fraction_size):
+#                 value /= 2
+#                 n = xdrtype(str(value))
+#                 fraction >>= 1
+#                 packed = fraction.to_bytes(xdrtype._packed_size, 'big')
+#                 assert n.encode() == packed
+#                 unpacked = xdrtype.decode(packed)
+#                 assert n == unpacked
+
+# @pytest.mark.parametrize('xdrtype', [
+#     xdrlib.Float32,
+#     xdrlib.Float64,
+#     xdrlib.Float128
+# ])
+# def test_underflow(xdrtype):
+#     with localcontext() as ctx:
+#         ctx.prec = xdrtype._fraction_size + 3
+#         ctx.rounding = ROUND_HALF_EVEN
+#         value = ctx.power(2, 1-xdrtype._exponent_bias)
+#         fraction = 1 << (xdrtype._fraction_size)
+#         for i in range(xdrtype._fraction_size):
+#             value /= 2
+#             n = xdrtype(str(value))
+#             fraction >>= 1
+#             packed = fraction.to_bytes(xdrtype._packed_size, 'big')
+#             assert n.encode() == packed
+#             unpacked = xdrtype.decode(packed)
+#             assert n == unpacked
+#             assert unpacked.encode() == packed
 
 # @pytest.mark.parametrize('xdrtype', [
 #     xdrlib.Float32,
