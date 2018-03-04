@@ -232,11 +232,11 @@ class _XDR_float(_XDR_type, float):
             return signbit, exponent, fraction
 
         if dec_exp > 0:
-            intpart_str = intpart_str + decpart_str[:exp] + '0'*(exp - len(decpart_str))
-            decpart_str = decpart_str[exp:]
+            intpart_str = intpart_str + decpart_str[:dec_exp] + '0'*(dec_exp - len(decpart_str))
+            decpart_str = decpart_str[dec_exp:]
         elif dec_exp < 0:
-            decpart_str = '0'*(-exp - len(intpart_str)) + intpart_str[exp:] + decpart_str
-            intpart_str = intpart_str[:exp]
+            decpart_str = '0'*(-dec_exp - len(intpart_str)) + intpart_str[dec_exp:] + decpart_str
+            intpart_str = intpart_str[:dec_exp]
 
         intpart = int(intpart_str) if intpart_str else 0
         decpart = int(decpart_str) if decpart_str else 0
