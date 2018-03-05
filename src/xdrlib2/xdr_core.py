@@ -6,6 +6,8 @@ import math
 import numbers
 import re
 
+from sys import float_info
+_float_rounding = float_info.rounds
 
 class _XDR_type:
     pass
@@ -48,12 +50,21 @@ class _XDR_integer(_XDR_type, int):
 
 
 def _div_round_to_even(number, divisor):
+    # Precondition: positive number and divisor
     f, r = divmod(number, divisor)
-    threshold = divisor >> 1
-    if r > threshold:
-        f += 1
-    if r == threshold:
-        f += f % 2
+    if _float_rounding == 0: # towards zero
+        pass
+    if _float_rounding == 1: # to nearest
+        threshold = divisor >> 1
+        if r > threshold:
+            f += 1
+        elif r == threshold:
+            f += f % 2
+    if _float_rounding == 2: # towards positive infinity
+        if r > 0:
+            f += 1
+    if _float_rounding == 3: # towards negative infinity
+        pass
     return f
 
 
@@ -229,6 +240,8 @@ class _XDR_float(_XDR_type, float):
                                           denominator << (exponent - cls._fraction_size))
 
         if fraction.bit_length() > cls._fraction_size:
+            fraction += 1 << cls._fraction_size
+            fraction >>= 1
             fraction &= cls._fraction_mask
             exponent += 1
         assert fraction.bit_length() <= cls._fraction_size
@@ -243,15 +256,12 @@ class _XDR_float(_XDR_type, float):
         if exponent <= 0:
             shift = 1 - exponent
             exponent = 0
-            if shift <= cls._fraction_size:
-                value = (1 << cls._fraction_size) + fraction
-                fraction = _div_round_to_even(value, 1 << shift)
-                if fraction.bit_length() > cls._fraction_size:
-                    fraction >>= 1
-                    exponent += 1
-                assert fraction.bit_length() <= cls._fraction_size
-            else:
-                fraction = 0
+            value = (1 << cls._fraction_size) + fraction
+            fraction = _div_round_to_even(value, 1 << shift)
+            if fraction.bit_length() > cls._fraction_size:
+                fraction >>= 1
+                exponent += 1
+            assert fraction.bit_length() <= cls._fraction_size
         return exponent, fraction
 
     @property

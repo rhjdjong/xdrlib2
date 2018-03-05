@@ -11,7 +11,7 @@ import pytest
 import xdrlib2 as xdrlib
 
 precision = {
-    xdrlib.Float32: 1e-7,
+    xdrlib.Float32: 1e-6,
     xdrlib.Float64: 1e-15,
     xdrlib.Float128: 1e-15
 }
@@ -258,11 +258,43 @@ def test_largest_subnormal_number(xdrtype):
     xdrlib.Float64,
     xdrlib.Float128
 ])
-def test_smallest_subnormal_number(xdrtype):
+def test_smallest_subnormal_numbers(xdrtype):
     with localcontext() as ctx:
         ctx.prec = xdrtype._fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        smallest_subnormal = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        value = ctx.power(2, exponent)
+        n = xdrtype(str(value))
+        assert n.exponent == 0
+        assert n.fraction == 1
+        assert xdrtype.decode(n.encode()) == n
+
+        exponent -= 1
+        value = ctx.power(2, exponent)
+        n = xdrtype(str(value))
+        assert n.exponent == 0
+        # assert n.fraction == 1
+        assert xdrtype.decode(n.encode()) == n
+
+        exponent -= 1
+        value = ctx.power(2, exponent)
+        n = xdrtype(str(value))
+        assert n.exponent == 0
+        assert n.fraction == 0
+        assert xdrtype.decode(n.encode()) == n
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
+    with localcontext() as ctx:
+        ctx.prec = xdrtype._fraction_size + 3
+        ctx.rounding = ROUND_HALF_EVEN
+        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        smallest_subnormal = ctx.power(2, exponent)
         n = xdrtype(str(smallest_subnormal))
         assert n.exponent == 0
         assert n.fraction == 1
