@@ -8,6 +8,12 @@ import struct
 from decimal import Decimal, localcontext, ExtendedContext, ROUND_HALF_EVEN
 import xdrlib2 as xdrlib
 
+precision = {
+    xdrlib.Float32: 1e-7,
+    xdrlib.Float64: 1e-15,
+    xdrlib.Float128: 1e-15
+}
+
 @pytest.mark.parametrize('xdrtype', [
     xdrlib.Float32,
     xdrlib.Float64,
@@ -39,7 +45,7 @@ def test_default_instantiation(xdrtype):
 def test_instantiation_from_number(xdrtype, param, value):
     n = xdrtype(param)
     assert isinstance(n, xdrtype)
-    # assert n == value
+    assert n == pytest.approx(value, precision[xdrtype])
     packed = n.encode()
     m = xdrtype.decode(packed)
     assert isinstance(m, xdrtype)
@@ -60,7 +66,7 @@ def test_instantiation_from_string(xdrtype, param, value):
     n = xdrtype(param)
     assert isinstance(n, xdrtype)
     value = float(value)
-    # assert n == value
+    assert n == pytest.approx(value, precision[xdrtype])
     packed = n.encode()
     m = xdrtype.decode(packed)
     assert isinstance(m, xdrtype)
@@ -79,7 +85,7 @@ def test_instantiation_from_bytes(xdrtype, param, value):
     n = xdrtype(param)
     assert isinstance(n, xdrtype)
     value = float(value)
-    # assert n == value
+    assert n == pytest.approx(value, precision[xdrtype])
     packed = n.encode()
     m = xdrtype.decode(packed)
     assert isinstance(m, xdrtype)
@@ -150,6 +156,7 @@ def test_invalid_instantiation_parameter_type_raises_TypeError(xdrtype, invalid)
 ])
 def test_encoding_for_Float32(value):
     n = xdrlib.Float32(value)
+    assert n == pytest.approx(value, precision[xdrlib.Float32])
     packed = struct.pack('>f', value)
     assert n.encode() == packed
     n2 = xdrlib.Float32.decode(packed)
@@ -173,6 +180,7 @@ def test_encoding_for_Float32(value):
 ])
 def test_encoding_for_Float64(value):
     n = xdrlib.Float64(value)
+    assert n == pytest.approx(value, precision[xdrlib.Float64])
     packed = struct.pack('>d', value)
     assert n.encode() == packed
     n2 = xdrlib.Float64.decode(packed)
@@ -181,25 +189,22 @@ def test_encoding_for_Float64(value):
     assert n2.fraction == n.fraction
 
 
-# @pytest.mark.parametrize('xdrtype', [
-#     xdrlib.Float32,
-#     xdrlib.Float64,
-#     xdrlib.Float128
-# ])
-# def test_maximum_value(xdrtype):
-#     with localcontext() as ctx:
-#             ctx.prec = xdrtype._fraction_size + 3
-#             ctx.rounding = ROUND_HALF_EVEN
-#             value = ctx.power(2, xdrtype._exponent_bias)
-#             fraction = 1 << (xdrtype._fraction_size)
-#             for i in range(xdrtype._fraction_size):
-#                 value /= 2
-#                 n = xdrtype(str(value))
-#                 fraction >>= 1
-#                 packed = fraction.to_bytes(xdrtype._packed_size, 'big')
-#                 assert n.encode() == packed
-#                 unpacked = xdrtype.decode(packed)
-#                 assert n == unpacked
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_maximum_value(xdrtype):
+    with localcontext() as ctx:
+            ctx.prec = xdrtype._fraction_size + 3
+            ctx.rounding = ROUND_HALF_EVEN
+            max_normal_value = ctx.subtract(ctx.power(2, xdrtype._exponent_bias + 1),
+                                            ctx.power(2, xdrtype._exponent_bias - xdrtype._fraction_size))
+            n = xdrtype(str(max_normal_value))
+            assert n.exponent == xdrtype._max_exponent - 1
+            assert n.fraction == xdrtype._fraction_mask
+            assert xdrtype.decode(n.encode()) == n
+
 
 # @pytest.mark.parametrize('xdrtype', [
 #     xdrlib.Float32,
@@ -222,62 +227,67 @@ def test_encoding_for_Float64(value):
 #             assert n == unpacked
 #             assert unpacked.encode() == packed
 
-# @pytest.mark.parametrize('xdrtype', [
-#     xdrlib.Float32,
-#     xdrlib.Float64,
-#     xdrlib.Float128
-# ])
-# def test_smallest_normal_number(xdrtype):
-#     with localcontext(xdrtype._decimal_context) as ctx:
-#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
-#         smallest_normal = ctx.multiply(1 << xdrtype._fraction_size, power_of_two)
-#         n = xdrtype(smallest_normal)
-#         assert n.exponent == 1
-#         assert n.fraction == 0
-#         assert xdrtype.decode(n.encode()) == n
-#
-# @pytest.mark.parametrize('xdrtype', [
-#     xdrlib.Float32,
-#     xdrlib.Float64,
-#     xdrlib.Float128
-# ])
-# def test_largest_subnormal_number(xdrtype):
-#     with localcontext(xdrtype._decimal_context) as ctx:
-#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
-#         largest_subnormal = ctx.multiply(xdrtype._fraction_mask, power_of_two)
-#         n = xdrtype(largest_subnormal)
-#         assert n.exponent == 0
-#         assert n.fraction == xdrtype._fraction_mask
-#         assert xdrtype.decode(n.encode()) == n
-#
-# @pytest.mark.parametrize('xdrtype', [
-#     xdrlib.Float32,
-#     xdrlib.Float64,
-#     xdrlib.Float128
-# ])
-# def test_smallest_subnormal_number(xdrtype):
-#     with localcontext(xdrtype._decimal_context) as ctx:
-#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
-#         smallest_subnormal = ctx.multiply(1, power_of_two)
-#         n = xdrtype(smallest_subnormal)
-#         assert n.exponent == 0
-#         assert n.fraction == 1
-#         assert xdrtype.decode(n.encode()) == n
-#
+@pytest.mark.parametrize('xdrtype', [
+    # xdrlib.Float32,
+    xdrlib.Float64,
+    # xdrlib.Float128
+])
+def test_smallest_normal_number(xdrtype):
+    with localcontext() as ctx:
+        ctx.prec = xdrtype._fraction_size + 3
+        ctx.rounding = ROUND_HALF_EVEN
+        smallest_normal = ctx.power(2, 1 - xdrtype._exponent_bias)
+        n = xdrtype(str(smallest_normal))
+        assert n.exponent == 1
+        assert n.fraction == 0
+        assert xdrtype.decode(n.encode()) == n
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_largest_subnormal_number(xdrtype):
+    with localcontext() as ctx:
+        ctx.prec = xdrtype._fraction_size + 3
+        ctx.rounding = ROUND_HALF_EVEN
+        power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+        largest_subnormal = ctx.multiply(xdrtype._fraction_mask, power_of_two)
+        n = xdrtype(str(largest_subnormal))
+        assert n.exponent == 0
+        assert n.fraction == xdrtype._fraction_mask
+        assert xdrtype.decode(n.encode()) == n
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_smallest_subnormal_number(xdrtype):
+    with localcontext() as ctx:
+        ctx.prec = xdrtype._fraction_size + 3
+        ctx.rounding = ROUND_HALF_EVEN
+        smallest_subnormal = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+        n = xdrtype(str(smallest_subnormal))
+        assert n.exponent == 0
+        assert n.fraction == 1
+        assert xdrtype.decode(n.encode()) == n
+
 # @pytest.mark.parametrize('xdrtype', [
 #     xdrlib.Float32,
 #     xdrlib.Float64,
 #     xdrlib.Float128
 # ])
 # def test_rounding_of_half_smallest_subnormal_number(xdrtype):
-#     with localcontext(xdrtype._decimal_context) as ctx:
-#         power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
-#         smallest_subnormal = ctx.multiply(1, power_of_two)
-#         n = xdrtype(ctx.divide(smallest_subnormal, 2))
+#     with localcontext() as ctx:
+#         ctx.prec = xdrtype._fraction_size + 4
+#         ctx.rounding = ROUND_HALF_EVEN
+#         power_of_two = ctx.power(2, - xdrtype._exponent_bias - xdrtype._fraction_size)
+#         n = xdrtype(str(power_of_two))
 #         assert n.exponent == 0
 #         assert n.fraction == 1
 #         assert xdrtype.decode(n.encode()) == n
-#
+
 # @pytest.mark.parametrize('xdrtype', [
 #     xdrlib.Float32,
 #     xdrlib.Float64,

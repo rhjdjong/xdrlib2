@@ -160,7 +160,12 @@ class _XDR_float(_XDR_type, float):
             else:
                 value = (-1 if signbit else 1) * fraction * 2**(1 - cls._exponent_bias - cls._fraction_size)
         else:
-            value = (-1 if signbit else 1) * (1 + fraction * 2**(-cls._fraction_size)) * 2**(exponent - cls._exponent_bias)
+            try:
+                value = (-1 if signbit else 1) * (1 + fraction * 2**(-cls._fraction_size))\
+                        * 2**(exponent - cls._exponent_bias)
+            except OverflowError:
+                value = '-inf' if signbit else 'inf'
+
         instance = super().__new__(cls, value)
         instance._frozen = False
         instance.signbit = signbit
@@ -264,10 +269,11 @@ class _XDR_float(_XDR_type, float):
                 fraction = _div_round_to_even(fract << (cls._fraction_size - exponent), denominator)
             else:
                 fraction = _div_round_to_even(fract, denominator << (exponent - cls._fraction_size))
-            if fraction.bit_length() > cls._fraction_size:
-                fraction >>= 1
-                exponent += 1
-            assert fraction.bit_length() <= cls._fraction_size
+
+        if fraction.bit_length() > cls._fraction_size:
+            fraction >>= 1
+            exponent += 1
+        assert fraction.bit_length() <= cls._fraction_size
 
         exponent += cls._exponent_bias
         if exponent > cls._max_exponent:
