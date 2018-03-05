@@ -4,7 +4,6 @@
 
 import math
 import numbers
-from fractions import gcd
 import re
 
 
@@ -285,7 +284,6 @@ class _XDR_float(_XDR_type, float):
         signbit = packed_integer & 1
         return cls(signbit, exponent, fraction)
 
-
     @classmethod
     def fromhex(cls, hexstr):
         hstr = hexstr.strip().lower()
@@ -305,7 +303,7 @@ class _XDR_float(_XDR_type, float):
         intpart = int(m['intpart'], 16)
         frac_str = m['fraction']
         frac = int(frac_str, 16) if frac_str else 0
-        denominator = 1 << 4*len(frac_str) if frac_str else 1
+        denominator = 1 << 4 * len(frac_str) if frac_str else 1
         numerator = intpart * denominator + frac
         exp_str = m['exp']
         exp = int(exp_str) if exp_str else 0
@@ -318,7 +316,6 @@ class _XDR_float(_XDR_type, float):
         else:
             exponent, fraction = cls._extract_from_ratio(numerator, denominator)
         return cls(signbit, exponent, fraction)
-
 
     def hex(self):
         string_buffer = []
@@ -361,16 +358,15 @@ class _XDR_float(_XDR_type, float):
             exponent = self.exponent - self._exponent_bias
             numerator = (1 << self._fraction_size) + self.fraction
         if numerator == 0:
-            return (0, 1)
+            return 0, 1
 
         denominator = (1 << self._fraction_size)
         if exponent >= 0:
             numerator <<= exponent
         else:
             denominator <<= -exponent
-        factor = gcd(numerator, denominator)
-        return (numerator // factor, denominator // factor)
-
+        factor = math.gcd(numerator, denominator)
+        return numerator // factor, denominator // factor
 
     def is_integer(self):
         n, d = self.as_integer_ratio()
