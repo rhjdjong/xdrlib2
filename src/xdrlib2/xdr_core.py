@@ -247,33 +247,34 @@ class _XDR_float(_XDR_type, float):
     @classmethod
     def _extract_from_ratio(cls, numerator, denominator):
         if numerator < denominator:
-            exponent = denominator.bit_length() - numerator.bit_length()
+            exponent = numerator.bit_length() - denominator.bit_length()
             numerator <<= -exponent
             while numerator < denominator:
                 exponent -= 1
                 numerator <<= 1
             numerator -= denominator
             assert numerator < denominator
-            fraction = _div_round_to_even(denominator*numerator, 1 << cls._fraction_size)
+            fraction = _div_round_to_even(numerator << cls._fraction_size, denominator)
         else:
-            intpart = numerator // denominator
+            intpart, fract_from_dec = divmod(numerator, denominator)
             exponent = intpart.bit_length() - 1
+            fract_from_int = intpart & ((1 << exponent) - 1)
+            fract = fract_from_int * denominator + fract_from_dec
             if exponent <= cls._fraction_size:
-                fraction = _div_round_to_even((numerator << (cls._fraction_size - exponent)) -
-                                              (denominator << cls._fraction_size), denominator)
+                fraction = _div_round_to_even(fract << (cls._fraction_size - exponent), denominator)
             else:
-                fraction = _div_round_to_even(numerator - denominator << exponent,
-                                              denominator << (exponent - cls._fraction_size))
+                fraction = _div_round_to_even(fract, denominator << (exponent - cls._fraction_size))
             if fraction.bit_length() > cls._fraction_size:
                 fraction >>= 1
                 exponent += 1
-            # assert fraction.bit_length() <= cls._fraction_size
+            assert fraction.bit_length() <= cls._fraction_size
 
         exponent += cls._exponent_bias
         if exponent > cls._max_exponent:
             fraction = 0
             exponent = cls._max_exponent
         if exponent <= 0:
+            fraction += 1 << cls._fraction_size
             fraction >>= (1 - exponent)
             exponent = 0
         return exponent, fraction
