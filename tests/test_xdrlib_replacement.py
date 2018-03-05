@@ -8,6 +8,7 @@
 import pytest
 import xdrlib2 as xdrlib
 
+
 def test_xdr():
     p = xdrlib.Packer()
 

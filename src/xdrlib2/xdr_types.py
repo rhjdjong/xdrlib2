@@ -2,44 +2,25 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-import struct
+from . import xdr_core
 
 
-class _Bounded(int):
-    def __new__(cls, value=0):
-        v = super().__new__(cls, value)
-        if cls.min <= v < cls.max:
-            return v
-        raise ValueError(f"Value {value!r} is out of range for class {cls.__name__}")
-
-    def encode(self):
-        return struct.pack(self.fmt, self)
-
-    @classmethod
-    def decode(cls, packed):
-        v = struct.unpack(cls.fmt, packed)[0]
-        return cls(v)
+class Int32(xdr_core._XDR_integer, size=32, signed=True): pass
 
 
-class Int32(_Bounded):
-    min = -2**31
-    max = 2**31
-    fmt = '>i'
+class Int32u(xdr_core._XDR_integer, size=32, signed=False): pass
 
 
-class Int32u(_Bounded):
-    min = 0
-    max = 2**32
-    fmt = '>I'
+class Int64(xdr_core._XDR_integer, size=64, signed=True): pass
 
 
-class Int64(_Bounded):
-    min = -2**63
-    max = 2**63
-    fmt = '>q'
+class Int64u(xdr_core._XDR_integer, size=64, signed=False): pass
 
 
-class Int64u(_Bounded):
-    min = 0
-    max = 2**64
-    fmt = '>Q'
+class Float32(xdr_core._XDR_float, exponent_size=8, fraction_size=23): pass
+
+
+class Float64(xdr_core._XDR_float, exponent_size=11, fraction_size=52): pass
+
+
+class Float128(xdr_core._XDR_float, exponent_size=15, fraction_size=112): pass
