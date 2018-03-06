@@ -11,7 +11,7 @@ import pytest
 import xdrlib2 as xdrlib
 
 precision = {
-    xdrlib.Float32: 1e-7,
+    xdrlib.Float32: 1e-6,
     xdrlib.Float64: 1e-15,
     xdrlib.Float128: 1e-15
 }
@@ -161,10 +161,11 @@ def test_encoding_for_Float32(value):
 
 @pytest.mark.parametrize('value', [
     float('-inf'),
-    ((1 << 53) - 1) * 2 ** (1022 - 52),
+    2 ** 1024 - 2 ** (1023-52),
     2 ** -1022,
     2 ** -1022 - 2 ** -1074,
     2 ** -1074,
+    2 ** -1075,
     1.0,
     -2.0,
     0.0,
@@ -258,11 +259,28 @@ def test_largest_subnormal_number(xdrtype):
     xdrlib.Float64,
     xdrlib.Float128
 ])
-def test_smallest_subnormal_number(xdrtype):
+def test_smallest_subnormal_numbers(xdrtype):
     with localcontext() as ctx:
         ctx.prec = xdrtype._fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        smallest_subnormal = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
+        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        value = ctx.power(2, exponent)
+        n = xdrtype(str(value))
+        assert n.exponent == 0
+        assert n.fraction == 1
+        assert xdrtype.decode(n.encode()) == n
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
+    with localcontext() as ctx:
+        ctx.prec = xdrtype._fraction_size + 3
+        ctx.rounding = ROUND_HALF_EVEN
+        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        smallest_subnormal = ctx.power(2, exponent)
         n = xdrtype(str(smallest_subnormal))
         assert n.exponent == 0
         assert n.fraction == 1
@@ -294,7 +312,7 @@ def test_as_integer_ratio(xdrtype, value, ratio):
     (float('inf'), OverflowError),
     (float('nan'), ValueError)
 ])
-def test_as_integer_ratio_raises_exception(xdrtype, value, exception):
+def test_as_integer_ratio_raises_exception_for_inf_and_nan_value(xdrtype, value, exception):
     n = xdrtype(value)
     with pytest.raises(exception):
         n.as_integer_ratio()

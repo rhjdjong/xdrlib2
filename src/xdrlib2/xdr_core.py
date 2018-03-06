@@ -6,6 +6,8 @@ import math
 import numbers
 import re
 
+from sys import float_info
+_float_rounding = float_info.rounds
 
 class _XDR_type:
     pass
@@ -45,16 +47,6 @@ class _XDR_integer(_XDR_type, int):
 
     def __repr__(self):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
-
-
-def _div_round_to_even(number, divisor):
-    f, r = divmod(number, divisor)
-    threshold = divisor >> 1
-    if r > threshold:
-        f += 1
-    if r == threshold:
-        f += f % 2
-    return f
 
 
 class _XDR_float(_XDR_type, float):
@@ -210,48 +202,65 @@ class _XDR_float(_XDR_type, float):
 
     @classmethod
     def _extract_from_ratio(cls, numerator, denominator):
-        if numerator < denominator:
-            exponent = numerator.bit_length() - denominator.bit_length()
-            v = numerator << -exponent
-            while v < denominator:
-                exponent -= 1
-                v <<= 1
-            assert denominator <= v < 2 * denominator
-        else:
-            intpart = numerator // denominator
-            exponent = intpart.bit_length() - 1
-
-        if exponent <= cls._fraction_size:
-            fraction = _div_round_to_even((numerator << (cls._fraction_size - exponent)) -
-                                          (denominator << cls._fraction_size), denominator)
-        else:
-            fraction = _div_round_to_even(numerator - (denominator << exponent),
-                                          denominator << (exponent - cls._fraction_size))
-
-        if fraction.bit_length() > cls._fraction_size:
-            fraction &= cls._fraction_mask
+        exponent = numerator.bit_length() - denominator.bit_length() - 1
+        while exponent < 0 and denominator <= (numerator << -(exponent+1)):
             exponent += 1
-        assert fraction.bit_length() <= cls._fraction_size
+        while exponent >= 0 and (denominator << (exponent+1)) <= numerator:
+            exponent += 1
+
+        if exponent >= 0:
+            assert (denominator << exponent) <= numerator < (denominator << (exponent + 1))
+        else:
+            assert denominator <= (numerator << -exponent)  < (denominator << 1)
+        if exponent <= -cls._exponent_bias:
+            n = numerator * (1 << (cls._fraction_size + cls._exponent_bias - 1))
+            d = denominator
+        elif exponent <= cls._fraction_size:
+            n = (numerator << (cls._fraction_size - exponent)) - (denominator << cls._fraction_size)
+            d = denominator
+        else:
+            n = numerator - (denominator << exponent)
+            d = denominator << (exponent - cls._fraction_size)
+
+        fraction, remainder = divmod(n, d)
+        if 2*remainder > d:
+            fraction += 1
+        elif 2*remainder == d:
+            fraction += fraction % 2
 
         exponent += cls._exponent_bias
+        if exponent < 0:
+            exponent = 0
+        if fraction.bit_length() > cls._fraction_size:
+            if exponent == 0:
+                exponent = 1
+                fraction = 0
+            else:
+                fraction += (1 << cls._fraction_size)
+                fraction >>= 1
+                # fraction &= cls._fraction_mask
+                exponent += 1
+        assert fraction.bit_length() <= cls._fraction_size
+
         if exponent > cls._max_exponent:
             fraction = 0
             exponent = cls._max_exponent
-        if exponent == 0 and fraction == cls._fraction_mask:
-            fraction = 0
-            exponent = 1
-        if exponent <= 0:
-            shift = 1 - exponent
-            exponent = 0
-            if shift <= cls._fraction_size:
-                value = (1 << cls._fraction_size) + fraction
-                fraction = _div_round_to_even(value, 1 << shift)
-                if fraction.bit_length() > cls._fraction_size:
-                    fraction >>= 1
-                    exponent += 1
-                assert fraction.bit_length() <= cls._fraction_size
-            else:
-                fraction = 0
+        # if exponent < 1:
+        #     n = numerator
+        #     d = denominator * (1 << (cls._fraction_size) + cls._exponent_bias - 1)
+        #     fraction
+        # if exponent == 0 and fraction == cls._fraction_mask:
+        #     fraction = 0
+        #     exponent = 1
+        # if exponent <= 0:
+        #     shift = 1 - exponent
+        #     exponent = 0
+        #     value = (1 << cls._fraction_size) + fraction
+        #     fraction = _div_round_to_even(value, 1 << shift)
+        #     if fraction.bit_length() > cls._fraction_size:
+        #         fraction >>= 1
+        #         exponent += 1
+        #     assert fraction.bit_length() <= cls._fraction_size
         return exponent, fraction
 
     @property
