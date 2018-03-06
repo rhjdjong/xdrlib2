@@ -127,15 +127,19 @@ class _XDR_float(_XDR_type, float):
 
     @classmethod
     def _extract_from_number(cls, value):
-        signbit = 1 if math.copysign(1.0, value) < 0 else 0
+        if isinstance(value, numbers.Integral):
+            signbit = 1 if value < 0 else 0
+        else:
+            signbit = 1 if math.copysign(1.0, value) < 0 else 0
         value = abs(value)
-        if math.isinf(value):
-            exponent = cls._max_exponent
-            fraction = 0
-        elif math.isnan(value):
-            exponent = cls._max_exponent
-            fraction = 1 << (cls._fraction_size - 1)
-        elif value == 0.0:
+        if not isinstance(value, numbers.Integral) and not math.isfinite(value):
+            if math.isinf(value):
+                exponent = cls._max_exponent
+                fraction = 0
+            elif math.isnan(value):
+                exponent = cls._max_exponent
+                fraction = 1 << (cls._fraction_size - 1)
+        elif value == 0:
             exponent = 0
             fraction = 0
         else:
@@ -245,22 +249,6 @@ class _XDR_float(_XDR_type, float):
         if exponent > cls._max_exponent:
             fraction = 0
             exponent = cls._max_exponent
-        # if exponent < 1:
-        #     n = numerator
-        #     d = denominator * (1 << (cls._fraction_size) + cls._exponent_bias - 1)
-        #     fraction
-        # if exponent == 0 and fraction == cls._fraction_mask:
-        #     fraction = 0
-        #     exponent = 1
-        # if exponent <= 0:
-        #     shift = 1 - exponent
-        #     exponent = 0
-        #     value = (1 << cls._fraction_size) + fraction
-        #     fraction = _div_round_to_even(value, 1 << shift)
-        #     if fraction.bit_length() > cls._fraction_size:
-        #         fraction >>= 1
-        #         exponent += 1
-        #     assert fraction.bit_length() <= cls._fraction_size
         return exponent, fraction
 
     @property
@@ -380,3 +368,32 @@ class _XDR_float(_XDR_type, float):
     def is_integer(self):
         n, d = self.as_integer_ratio()
         return n % d == 0
+
+    def __abs__(self):
+        return self.__class__(0, self.exponent, self.fraction)
+
+    def __neg__(self):
+        return self.__class__(0 if self.signbit else 1, self.exponent, self.fraction)
+
+    def __pos__(self):
+        return self
+
+    def __int__(self):
+        s, e, f = self.signbit, self.exponent, self.fraction
+        if e == self._max_exponent:
+            if f == 0:
+                raise OverflowError(f"cannot convert {self.__class__.__name__:s} infinity to integer")
+            else:
+                raise ValueError(f"cannot convert {self.__class__.__name__:s} NaN to integer")
+
+        if e == 0:
+            value = f >> self._exponent_bias - 1
+        else:
+            value = (1 << self._fraction_size) + f
+            shift = e - self._exponent_bias - self._fraction_size
+            if shift >= 0:
+                value <<= shift
+            else:
+                value >>= -shift
+        return -value if s else value
+
