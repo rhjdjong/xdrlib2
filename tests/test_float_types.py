@@ -161,7 +161,7 @@ def test_encoding_for_Float32(value):
 
 @pytest.mark.parametrize('value', [
     float('-inf'),
-    ((1 << 53) - 1) * 2 ** (1022 - 52),
+    2 ** 1024 - 2 ** (1023-52),
     2 ** -1022,
     2 ** -1022 - 2 ** -1074,
     2 ** -1074,
@@ -269,21 +269,6 @@ def test_smallest_subnormal_numbers(xdrtype):
         assert n.fraction == 1
         assert xdrtype.decode(n.encode()) == n
 
-        exponent -= 1
-        value = ctx.power(2, exponent)
-        n = xdrtype(str(value))
-        assert n.exponent == 0
-        # assert n.fraction == 1
-        assert xdrtype.decode(n.encode()) == n
-
-        exponent -= 1
-        value = ctx.power(2, exponent)
-        n = xdrtype(str(value))
-        assert n.exponent == 0
-        assert n.fraction == 0
-        assert xdrtype.decode(n.encode()) == n
-
-
 @pytest.mark.parametrize('xdrtype', [
     xdrlib.Float32,
     xdrlib.Float64,
@@ -326,7 +311,7 @@ def test_as_integer_ratio(xdrtype, value, ratio):
     (float('inf'), OverflowError),
     (float('nan'), ValueError)
 ])
-def test_as_integer_ratio_raises_exception(xdrtype, value, exception):
+def test_as_integer_ratio_raises_exception_for_inf_and_nan_value(xdrtype, value, exception):
     n = xdrtype(value)
     with pytest.raises(exception):
         n.as_integer_ratio()
