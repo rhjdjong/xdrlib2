@@ -2,18 +2,31 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from . import xdr_core
 
-Integer = xdr_core.Int32
-UnsignedInteger = xdr_core.Int32u
-Hyper = xdr_core.Int64
-UnsignedHyper = xdr_core.Int64u
-Float = xdr_core.Float32
-Double = xdr_core.Float64
-Quadruple = xdr_core.Float128
-
-Enumeration = xdr_core.XDR_Enumeration
+from .xdr_integer import Integer, UnsignedInteger, Hyper, UnsignedHyper
+from .xdr_enumeration import Enumeration
+from .xdr_float import Float, Double, Quadruple
 
 
-class Boolean(Enumeration, FALSE=0, TRUE=1):
-    pass
+class Boolean(Enumeration):
+    FALSE = 0
+    TRUE = 1
+
+
+FALSE = Boolean.FALSE
+TRUE = Boolean.TRUE
+
+
+__all__ = [
+    'Integer',
+    'UnsignedInteger',
+    'Hyper',
+    'UnsignedHyper',
+    'Enumeration',
+    'Float',
+    'Double',
+    'Quadruple',
+    'Boolean',
+    'FALSE',
+    'TRUE',
+]

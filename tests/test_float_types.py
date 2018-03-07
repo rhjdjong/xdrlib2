@@ -486,6 +486,7 @@ def test_comparison():
     assert n2 > 2 ** 10000
 
 
+# noinspection PyUnresolvedReferences
 def test_real_and_imag():
     n1 = xdrlib.Quadruple(2**10000)
     assert n1.imag == 0
