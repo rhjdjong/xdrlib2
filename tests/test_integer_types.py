@@ -7,17 +7,17 @@ import xdrlib2 as xdrlib
 
 
 def test_default_instantiation():
-    assert xdrlib.Int32() == 0
-    assert xdrlib.Int32u() == 0
-    assert xdrlib.Int64() == 0
-    assert xdrlib.Int64u() == 0
+    assert xdrlib.Integer() == 0
+    assert xdrlib.UnsignedInteger() == 0
+    assert xdrlib.Hyper() == 0
+    assert xdrlib.UnsignedHyper() == 0
 
 
 @pytest.mark.parametrize("xdrtype,values", [
-    (xdrlib.Int32, [-2 ** 31, -123456, -1, 0, 1, 34567, 2 ** 31 - 1]),
-    (xdrlib.Int32u, [0, 1, 345678, 2 ** 32 - 1]),
-    (xdrlib.Int64, [-2 ** 63, -2 ** 31 - 1, -123456, -1, 0, 1, 345678, 2 ** 31, 2 ** 63 - 1]),
-    (xdrlib.Int64u, [0, 1, 2 ** 32, 2 ** 64 - 1])
+    (xdrlib.Integer, [-2 ** 31, -123456, -1, 0, 1, 34567, 2 ** 31 - 1]),
+    (xdrlib.UnsignedInteger, [0, 1, 345678, 2 ** 32 - 1]),
+    (xdrlib.Hyper, [-2 ** 63, -2 ** 31 - 1, -123456, -1, 0, 1, 345678, 2 ** 31, 2 ** 63 - 1]),
+    (xdrlib.UnsignedHyper, [0, 1, 2 ** 32, 2 ** 64 - 1])
 ])
 def test_valid_values(xdrtype, values):
     for v in values:
@@ -27,10 +27,10 @@ def test_valid_values(xdrtype, values):
 
 
 @pytest.mark.parametrize("xdrtype,values", [
-    (xdrlib.Int32, [-2 ** 31 - 1, 2 ** 31]),
-    (xdrlib.Int32u, [-1, 2 ** 32]),
-    (xdrlib.Int64, [-2 ** 63 - 1, 2 ** 63]),
-    (xdrlib.Int64u, [-1, 2 ** 64])
+    (xdrlib.Integer, [-2 ** 31 - 1, 2 ** 31]),
+    (xdrlib.UnsignedInteger, [-1, 2 ** 32]),
+    (xdrlib.Hyper, [-2 ** 63 - 1, 2 ** 63]),
+    (xdrlib.UnsignedHyper, [-1, 2 ** 64])
 ])
 def test_invalid_values(xdrtype, values):
     for v in values:
@@ -39,14 +39,14 @@ def test_invalid_values(xdrtype, values):
 
 
 @pytest.mark.parametrize("xdrtype,values,packed", [
-    (xdrlib.Int32, [-2 ** 31, -1, 0, 1, 2 ** 31 - 1],
+    (xdrlib.Integer, [-2 ** 31, -1, 0, 1, 2 ** 31 - 1],
      [b'\x80\0\0\0', b'\xff\xff\xff\xff', b'\0\0\0\0', b'\0\0\0\x01', b'\x7f\xff\xff\xff']),
-    (xdrlib.Int32u, [0, 1, 2 ** 31 - 1, 2 ** 31, 2 ** 32 - 1],
+    (xdrlib.UnsignedInteger, [0, 1, 2 ** 31 - 1, 2 ** 31, 2 ** 32 - 1],
      [b'\0\0\0\0', b'\0\0\0\x01', b'\x7f\xff\xff\xff', b'\x80\0\0\0', b'\xff\xff\xff\xff']),
-    (xdrlib.Int64, [-2 ** 63, -1, 0, 1, 2 ** 63 - 1],
+    (xdrlib.Hyper, [-2 ** 63, -1, 0, 1, 2 ** 63 - 1],
      [b'\x80\0\0\0\0\0\0\0', b'\xff\xff\xff\xff\xff\xff\xff\xff', b'\0\0\0\0\0\0\0\0',
       b'\0\0\0\0\0\0\0\x01', b'\x7f\xff\xff\xff\xff\xff\xff\xff']),
-    (xdrlib.Int64u, [0, 1, 2 ** 63 - 1, 2 ** 63, 2 ** 64 - 1],
+    (xdrlib.UnsignedHyper, [0, 1, 2 ** 63 - 1, 2 ** 63, 2 ** 64 - 1],
      [b'\0\0\0\0\0\0\0\0', b'\0\0\0\0\0\0\0\x01', b'\x7f\xff\xff\xff\xff\xff\xff\xff',
       b'\x80\0\0\0\0\0\0\0', b'\xff\xff\xff\xff\xff\xff\xff\xff'])
 ])

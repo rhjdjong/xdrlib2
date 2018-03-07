@@ -6,31 +6,33 @@ import math
 import numbers
 import re
 import operator
+import inspect
 
 from sys import float_info
 
 _float_rounding = float_info.rounds
 
 
-class _XDR_type:
+class XDR_type:
     pass
 
 
-class _XDR_integer(_XDR_type, int):
+class XDR_integer(XDR_type, int):
     _signed = None
     _min = None
     _max = None
     _packed_size = None
 
     def __init_subclass__(cls, size=0, signed=False, **kwargs):
-        cls._signed = signed
-        if signed:
-            cls._min = -(1 << (size - 1))
-            cls._max = (1 << (size - 1))
-        else:
-            cls._min = 0
-            cls._max = 1 << size
-        cls._packed_size = size // 8 + (1 if size % 8 else 0)
+        if cls._signed is None:
+            cls._signed = signed
+            if signed:
+                cls._min = -(1 << (size - 1))
+                cls._max = (1 << (size - 1))
+            else:
+                cls._min = 0
+                cls._max = 1 << size
+            cls._packed_size = size // 8 + (1 if size % 8 else 0)
         super().__init_subclass__()
 
     def __new__(cls, value=0):
@@ -52,7 +54,80 @@ class _XDR_integer(_XDR_type, int):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
 
 
-class _XDR_float(_XDR_type, float):
+class Int32(XDR_integer, size=32, signed=True):
+    pass
+
+
+class Int32u(XDR_integer, size=32, signed=False):
+    pass
+
+
+class Int64(XDR_integer, size=64, signed=True):
+    pass
+
+
+class Int64u(XDR_integer, size=64, signed=False):
+    pass
+
+
+class _XDR_meta_enumeration(type):
+    def __setattr__(cls, name, value):
+        if cls._frozen:
+            raise AttributeError(f"cannot set or modify attributes of '{cls.__name__:s}' enumeration class")
+        super().__setattr__(name, value)
+
+
+class XDR_Enumeration(Int32, metaclass=_XDR_meta_enumeration):
+    _enum_map = None
+    _frozen = None
+
+    def __init_subclass__(cls, **name_value_map):
+        if cls._enum_map is not None:
+            raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type")
+
+        cls._frozen = False
+        for attr in cls.__dict__:
+            if not attr.startswith('_'):
+                setattr(cls, '_' + attr, getattr(cls, attr))
+        cls._enum_map = {}
+
+        framelist = inspect.stack()
+        # framelist[0] is current frame
+        # framelist[1] is the calling frame, i.e. the subclass definition
+        module_ns = framelist[1].frame.f_globals
+
+        for name, value in name_value_map.items():
+            if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name):
+                raise ValueError(f"invalid enum identifier name '{name:s}' in class {cls.__name__:s}")
+            if name in cls._enum_map:
+                raise AttributeError(f"enum identifier name '{name:s}' "
+                                     f"is already present in in class '{cls.__name__:s}'")
+            if name in module_ns:
+                raise AttributeError(f"enum identifier name '{name:s}' "
+                                     f"is already present in module '{__name__:s}'")
+            enum_value = super().__new__(cls, value)
+            cls._enum_map[name] = enum_value
+            setattr(cls, name, enum_value)
+            module_ns[name] = enum_value
+        cls._frozen = True
+
+    def __new__(cls, value):
+        if cls._enum_map is None:
+            raise NotImplementedError(f"cannot instantiate values of abstract base class")
+        if isinstance(value, str):
+            try:
+                return cls._enum_map[value]
+            except KeyError:
+                raise ValueError(f"Invalid enumeration identifier name '{value:s}' "
+                                 f"for enumeration '{cls.__name__:s}'")
+        if isinstance(value, int):
+            for enum_value in cls._enum_map.values():
+                if enum_value == value:
+                    return enum_value
+        raise ValueError(f"Invalid value {value!r} for enumeration '{cls.__name__:s}'")
+
+
+class XDR_float(XDR_type, float):
     _fraction_size = None
     _fraction_mask = None
     _exponent_size = None
@@ -78,9 +153,9 @@ class _XDR_float(_XDR_type, float):
                              f'together are not a multiple of 8 bits')
         cls._packed_size = packed_size
 
-        cls._signbit_class = type('Signbit', (_XDR_integer,), {}, size=1)
-        cls._exponent_class = type('Exponent', (_XDR_integer,), {}, size=exponent_size)
-        cls._fraction_class = type('Fraction', (_XDR_integer,), {}, size=fraction_size)
+        cls._signbit_class = type('Signbit', (XDR_integer,), {}, size=1)
+        cls._exponent_class = type('Exponent', (XDR_integer,), {}, size=exponent_size)
+        cls._fraction_class = type('Fraction', (XDR_integer,), {}, size=fraction_size)
 
         cls._exponent_size = exponent_size
         cls._fraction_size = fraction_size
@@ -93,7 +168,7 @@ class _XDR_float(_XDR_type, float):
             signbit, exponent, fraction = args
         elif len(args) <= 1:
             arg = args[0] if args else 0.0
-            if isinstance(arg, _XDR_float):
+            if isinstance(arg, XDR_float):
                 signbit, exponent, fraction = cls._extract_from_xdr_instance(arg)
             elif isinstance(arg, numbers.Real):
                 signbit, exponent, fraction = cls._extract_from_number(arg)
@@ -451,7 +526,7 @@ class _XDR_float(_XDR_type, float):
         if isinstance(other, numbers.Real):
             if math.isnan(other):
                 return False
-            if isinstance(other, _XDR_float) and other.isinf():
+            if isinstance(other, XDR_float) and other.isinf():
                 return oper(s_num, float('-inf') if other.signbit else float('inf'))
             if math.isinf(other):
                 return oper(s_num, other)
@@ -477,3 +552,15 @@ class _XDR_float(_XDR_type, float):
 
     def __gt__(self, other):
         return self._cmp(other, operator.gt)
+
+
+class Float32(XDR_float, exponent_size=8, fraction_size=23):
+    pass
+
+
+class Float64(XDR_float, exponent_size=11, fraction_size=52):
+    pass
+
+
+class Float128(XDR_float, exponent_size=15, fraction_size=112):
+    pass

@@ -4,23 +4,16 @@
 
 from . import xdr_core
 
+Integer = xdr_core.Int32
+UnsignedInteger = xdr_core.Int32u
+Hyper = xdr_core.Int64
+UnsignedHyper = xdr_core.Int64u
+Float = xdr_core.Float32
+Double = xdr_core.Float64
+Quadruple = xdr_core.Float128
 
-class Int32(xdr_core._XDR_integer, size=32, signed=True): pass
-
-
-class Int32u(xdr_core._XDR_integer, size=32, signed=False): pass
-
-
-class Int64(xdr_core._XDR_integer, size=64, signed=True): pass
-
-
-class Int64u(xdr_core._XDR_integer, size=64, signed=False): pass
+Enumeration = xdr_core.XDR_Enumeration
 
 
-class Float32(xdr_core._XDR_float, exponent_size=8, fraction_size=23): pass
-
-
-class Float64(xdr_core._XDR_float, exponent_size=11, fraction_size=52): pass
-
-
-class Float128(xdr_core._XDR_float, exponent_size=15, fraction_size=112): pass
+class Boolean(Enumeration, FALSE=0, TRUE=1):
+    pass
