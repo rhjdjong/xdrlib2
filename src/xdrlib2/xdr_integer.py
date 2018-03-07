@@ -25,21 +25,37 @@ class XdrInteger(XdrType, int):
 
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
-        if cls._min <= v < cls._max:
+        if cls.min() <= v < cls.max():
             return v
         raise ValueError(f"Value {value!r} is out of range for class {cls.__name__}.\n"
-                         f"\tAllowed range is [{cls._min:d} .. {cls._max - 1:d}].")
+                         f"\tAllowed range is [{cls.min():d} .. {cls.max() - 1:d}].")
 
     def encode(self):
-        return self.to_bytes(self._packed_size, 'big', signed=self._signed)
+        return self.to_bytes(self.size(), 'big', signed=self.signed())
 
     @classmethod
     def decode(cls, packed):
-        v = int.from_bytes(packed, 'big', signed=cls._signed)
+        v = int.from_bytes(packed, 'big', signed=cls.signed())
         return cls(v)
 
     def __repr__(self):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
+
+    @classmethod
+    def max(cls):
+        return cls._max
+
+    @classmethod
+    def min(cls):
+        return cls._min
+
+    @classmethod
+    def size(cls):
+        return cls._packed_size
+
+    @classmethod
+    def signed(cls):
+        return cls._signed
 
 
 class Int32(XdrInteger, size=32, signed=True):
