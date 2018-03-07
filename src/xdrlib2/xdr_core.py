@@ -452,18 +452,11 @@ class _XDR_float(_XDR_type, float):
         if isinstance(other, numbers.Real):
             if math.isnan(other):
                 return False
-            if isinstance(other, _XDR_float):
-                if other.isinf():
-                    o_num = float('-inf') if other.signbit else float('inf')
-                    o_denom = 1
-                else:
-                    o_num, o_denom = other.as_integer_ratio()
-            else:
-                if math.isinf(other):
-                    o_num = other
-                    o_denom = 1
-                else:
-                    o_num, o_denom = other.as_integer_ratio()
+            if isinstance(other, _XDR_float) and other.isinf():
+                return oper(s_num, float('-inf') if other.signbit else float('inf'))
+            if math.isinf(other):
+                return oper(s_num, other)
+            o_num, o_denom = other.as_integer_ratio()
             return oper(s_num * o_denom, o_num * s_denom)
         else:
             return NotImplemented

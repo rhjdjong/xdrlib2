@@ -204,8 +204,8 @@ def test_encoding_for_Float64(value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
+    # xdrlib.Float32,
+    # xdrlib.Float64,
     xdrlib.Float128
 ])
 def test_maximum_value(xdrtype):
