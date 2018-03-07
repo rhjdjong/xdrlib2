@@ -272,7 +272,6 @@ class _XDR_float(_XDR_type, float):
             else:
                 fraction += (1 << cls._fraction_size)
                 fraction >>= 1
-                # fraction &= cls._fraction_mask
                 exponent += 1
         assert fraction.bit_length() <= cls._fraction_size
 
