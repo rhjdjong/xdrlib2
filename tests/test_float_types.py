@@ -11,16 +11,16 @@ import pytest
 import xdrlib2 as xdrlib
 
 precision = {
-    xdrlib.Float32: 1e-6,
-    xdrlib.Float64: 1e-15,
-    xdrlib.Float128: 1e-15
+    xdrlib.Float: 1e-6,
+    xdrlib.Double: 1e-15,
+    xdrlib.Quadruple: 1e-15
 }
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_default_instantiation(xdrtype):
     n = xdrtype()
@@ -37,9 +37,9 @@ def test_default_instantiation(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('param,value', [
     (-3.14, -3.14),
@@ -56,9 +56,9 @@ def test_instantiation_from_number(xdrtype, param, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('param,value', [
     ('  -3.14  ', '-3.14'),
@@ -77,9 +77,9 @@ def test_instantiation_from_string(xdrtype, param, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('param,value', [
     (b'  -3.14  ', '-3.14'),
@@ -97,14 +97,14 @@ def test_instantiation_from_bytes(xdrtype, param, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value', [
-    (xdrlib.Float32('3.14')),
-    (xdrlib.Float64('3.14')),
-    (xdrlib.Float128('3.14'))
+    (xdrlib.Float('3.14')),
+    (xdrlib.Double('3.14')),
+    (xdrlib.Quadruple('3.14'))
 ])
 def test_instantiation_from_XDR_type(xdrtype, value):
     n = xdrtype(value)
@@ -116,9 +116,9 @@ def test_instantiation_from_XDR_type(xdrtype, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('invalid', [
     "  0x3.1  ",
@@ -138,9 +138,9 @@ def test_invalid_instantiation_string_raises_ValueError(xdrtype, invalid):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('invalid', [
     {},
@@ -167,12 +167,12 @@ def test_invalid_instantiation_parameter_type_raises_TypeError(xdrtype, invalid)
     math.pi,
     1 / 3,
 ])
-def test_encoding_for_Float32(value):
-    n = xdrlib.Float32(value)
-    assert n == pytest.approx(value, precision[xdrlib.Float32])
+def test_encoding_for_Float(value):
+    n = xdrlib.Float(value)
+    assert n == pytest.approx(value, precision[xdrlib.Float])
     packed = struct.pack('>f', value)
     assert n.encode() == packed
-    n2 = xdrlib.Float32.decode(packed)
+    n2 = xdrlib.Float.decode(packed)
     assert n2.signbit == n.signbit
     assert n2.exponent == n.exponent
     assert n2.fraction == n.fraction
@@ -192,21 +192,21 @@ def test_encoding_for_Float32(value):
     math.pi,
     1 / 3,
 ])
-def test_encoding_for_Float64(value):
-    n = xdrlib.Float64(value)
-    assert n == pytest.approx(value, precision[xdrlib.Float64])
+def test_encoding_for_Double(value):
+    n = xdrlib.Double(value)
+    assert n == pytest.approx(value, precision[xdrlib.Double])
     packed = struct.pack('>d', value)
     assert n.encode() == packed
-    n2 = xdrlib.Float64.decode(packed)
+    n2 = xdrlib.Double.decode(packed)
     assert n2.signbit == n.signbit
     assert n2.exponent == n.exponent
     assert n2.fraction == n.fraction
 
 
 @pytest.mark.parametrize('xdrtype', [
-    # xdrlib.Float32,
-    # xdrlib.Float64,
-    xdrlib.Float128
+    # xdrlib.Float,
+    # xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_maximum_value(xdrtype):
     with localcontext() as ctx:
@@ -221,9 +221,9 @@ def test_maximum_value(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_subnormal(xdrtype):
     with localcontext() as ctx:
@@ -241,9 +241,9 @@ def test_subnormal(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_smallest_normal_number(xdrtype):
     with localcontext() as ctx:
@@ -257,9 +257,9 @@ def test_smallest_normal_number(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_largest_subnormal_number(xdrtype):
     with localcontext() as ctx:
@@ -274,9 +274,9 @@ def test_largest_subnormal_number(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_smallest_subnormal_numbers(xdrtype):
     with localcontext() as ctx:
@@ -291,9 +291,9 @@ def test_smallest_subnormal_numbers(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
     with localcontext() as ctx:
@@ -308,9 +308,9 @@ def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value,ratio', [
     (0, (0, 1)),
@@ -324,9 +324,9 @@ def test_as_integer_ratio(xdrtype, value, ratio):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value,exception', [
     (float('inf'), OverflowError),
@@ -339,9 +339,9 @@ def test_as_integer_ratio_raises_exception_for_inf_and_nan_value(xdrtype, value,
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value,result', [
     (3.0, True),
@@ -353,14 +353,14 @@ def test_is_integer(xdrtype, value, result):
 
 
 def test_is_integer_quadruple_values():
-    n = xdrlib.Float128('1.3545e1000')
+    n = xdrlib.Quadruple('1.3545e1000')
     assert n.is_integer()
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('hexstr,value', [
     ('0', 0.0),
@@ -381,9 +381,9 @@ def test_fromhex(xdrtype, hexstr, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value', [
     -0.0,
@@ -402,9 +402,9 @@ def test_abs_value(xdrtype, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value', [
     -0.0,
@@ -429,9 +429,9 @@ def test_neg_and_pos_value(xdrtype, value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value, expected', [
     (-0.0, 0),
@@ -443,16 +443,16 @@ def test_int_conversion(xdrtype, value, expected):
     assert int(n) == expected
 
 
-def test_int_conversion_for_Float128():
+def test_int_conversion_for_Quadruple():
     i = 2 ** 10000
-    n = xdrlib.Float128(i)
+    n = xdrlib.Quadruple(i)
     assert int(n) == i
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
-    xdrlib.Float128
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
 ])
 @pytest.mark.parametrize('value,exception', [
     (float('inf'), OverflowError),
@@ -465,28 +465,29 @@ def test_int_raises_exception_for_inf_and_nan_value(xdrtype, value, exception):
 
 
 def test_float_conversion():
-    n = xdrlib.Float128(2 ** 10000)
+    n = xdrlib.Quadruple(2 ** 10000)
     assert math.isinf(float(n))
 
 
 def test_comparison():
-    n1 = xdrlib.Float32(1.75)
-    n2 = xdrlib.Float128(1.75)
+    n1 = xdrlib.Float(1.75)
+    n2 = xdrlib.Quadruple(1.75)
     assert n1 == n2
 
-    n1 = xdrlib.Float128(2 ** 10000)
-    n2 = xdrlib.Float128(2 ** 10000)
+    n1 = xdrlib.Quadruple(2 ** 10000)
+    n2 = xdrlib.Quadruple(2 ** 10000)
     assert n1 == n2
 
-    n1 = xdrlib.Float128(2 ** 10000)
-    n2 = xdrlib.Float128(2 ** 10001)
+    n1 = xdrlib.Quadruple(2 ** 10000)
+    n2 = xdrlib.Quadruple(2 ** 10001)
     assert n1 < n2
     assert n2 > n1
     assert n1 == 2 ** 10000
     assert n2 > 2 ** 10000
 
 
+# noinspection PyUnresolvedReferences
 def test_real_and_imag():
-    n1 = xdrlib.Float128(2**10000)
+    n1 = xdrlib.Quadruple(2**10000)
     assert n1.imag == 0
     assert n1.real == n1
