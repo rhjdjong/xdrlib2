@@ -5,9 +5,12 @@
 import math
 import numbers
 import re
+import operator
 
 from sys import float_info
+
 _float_rounding = float_info.rounds
+
 
 class _XDR_type:
     pass
@@ -90,7 +93,9 @@ class _XDR_float(_XDR_type, float):
             signbit, exponent, fraction = args
         elif len(args) <= 1:
             arg = args[0] if args else 0.0
-            if isinstance(arg, numbers.Real):
+            if isinstance(arg, _XDR_float):
+                signbit, exponent, fraction = cls._extract_from_xdr_instance(arg)
+            elif isinstance(arg, numbers.Real):
                 signbit, exponent, fraction = cls._extract_from_number(arg)
             elif isinstance(arg, str):
                 signbit, exponent, fraction = cls._extract_from_string(arg)
@@ -126,6 +131,31 @@ class _XDR_float(_XDR_type, float):
         return instance
 
     @classmethod
+    def _extract_from_xdr_instance(cls, value):
+        signbit = value.signbit
+        if value.exponent == value._max_exponent:
+            exponent = cls._max_exponent
+            fraction = 0 if value.fraction == 0 else 1 << (cls._fraction_size - 1)
+        elif value.exponent == 0 and value.fraction == 0:
+            exponent = 0
+            fraction = 0
+        else:
+            if value.exponent == 0:
+                exponent = 1 - value._exponent_bias - value._fraction_size
+                coefficient = value.fraction
+            else:
+                exponent = value.exponent - value._exponent_bias - value._fraction_size
+                coefficient = (1 << value._fraction_size) + value.fraction
+            if exponent >= 0:
+                numerator = coefficient << exponent
+                denominator = 1
+            else:
+                numerator = coefficient
+                denominator = 1 << -exponent
+            exponent, fraction = cls._extract_from_ratio(numerator, denominator)
+        return signbit, exponent, fraction
+
+    @classmethod
     def _extract_from_number(cls, value):
         if isinstance(value, numbers.Integral):
             signbit = 1 if value < 0 else 0
@@ -136,7 +166,7 @@ class _XDR_float(_XDR_type, float):
             if math.isinf(value):
                 exponent = cls._max_exponent
                 fraction = 0
-            elif math.isnan(value):
+            else:  # math.isnan(value)
                 exponent = cls._max_exponent
                 fraction = 1 << (cls._fraction_size - 1)
         elif value == 0:
@@ -207,15 +237,15 @@ class _XDR_float(_XDR_type, float):
     @classmethod
     def _extract_from_ratio(cls, numerator, denominator):
         exponent = numerator.bit_length() - denominator.bit_length() - 1
-        while exponent < 0 and denominator <= (numerator << -(exponent+1)):
+        while exponent < 0 and denominator <= (numerator << -(exponent + 1)):
             exponent += 1
-        while exponent >= 0 and (denominator << (exponent+1)) <= numerator:
+        while exponent >= 0 and (denominator << (exponent + 1)) <= numerator:
             exponent += 1
 
         if exponent >= 0:
             assert (denominator << exponent) <= numerator < (denominator << (exponent + 1))
         else:
-            assert denominator <= (numerator << -exponent)  < (denominator << 1)
+            assert denominator <= (numerator << -exponent) < (denominator << 1)
         if exponent <= -cls._exponent_bias:
             n = numerator * (1 << (cls._fraction_size + cls._exponent_bias - 1))
             d = denominator
@@ -227,9 +257,9 @@ class _XDR_float(_XDR_type, float):
             d = denominator << (exponent - cls._fraction_size)
 
         fraction, remainder = divmod(n, d)
-        if 2*remainder > d:
+        if 2 * remainder > d:
             fraction += 1
-        elif 2*remainder == d:
+        elif 2 * remainder == d:
             fraction += fraction % 2
 
         exponent += cls._exponent_bias
@@ -369,6 +399,12 @@ class _XDR_float(_XDR_type, float):
         n, d = self.as_integer_ratio()
         return n % d == 0
 
+    def isinf(self):
+        return self.exponent == self._max_exponent and self.fraction == 0
+
+    def isnan(self):
+        return self.exponent == self._max_exponent and self.fraction != 0
+
     def __abs__(self):
         return self.__class__(0, self.exponent, self.fraction)
 
@@ -397,3 +433,51 @@ class _XDR_float(_XDR_type, float):
                 value >>= -shift
         return -value if s else value
 
+    def _cmp(self, other, oper):
+        if self.isnan():
+            return False
+        if self.isinf():
+            s_num = float('-inf') if self.signbit else float('inf')
+            s_denom = 1
+        else:
+            s_num, s_denom = self.as_integer_ratio()
+
+        if isinstance(other, numbers.Integral):
+            return oper(s_num, other)
+
+        if isinstance(other, numbers.Real):
+            if math.isnan(other):
+                return False
+            if isinstance(other, _XDR_float):
+                if other.isinf():
+                    o_num = float('-inf') if other.signbit else float('inf')
+                    o_denom = 1
+                else:
+                    o_num, o_denom = other.as_integer_ratio()
+            else:
+                if math.isinf(other):
+                    o_num = other
+                    o_denom = 1
+                else:
+                    o_num, o_denom = other.as_integer_ratio()
+            return oper(s_num * o_denom, o_num * s_denom)
+        else:
+            return NotImplemented
+
+    def __eq__(self, other):
+        return self._cmp(other, operator.eq)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        return self._cmp(other, operator.lt)
+
+    def __le__(self, other):
+        return self._cmp(other, operator.le)
+
+    def __ge__(self, other):
+        return self._cmp(other, operator.ge)
+
+    def __gt__(self, other):
+        return self._cmp(other, operator.gt)
