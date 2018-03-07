@@ -293,6 +293,10 @@ class _XDR_float(_XDR_type, float):
     def fraction(self):
         return self._fraction
 
+    @property
+    def real(self):
+        return self
+
     def encode(self):
         packed_number = self.signbit
         packed_number <<= self._exponent_size

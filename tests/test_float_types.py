@@ -484,3 +484,9 @@ def test_comparison():
     assert n2 > n1
     assert n1 == 2 ** 10000
     assert n2 > 2 ** 10000
+
+
+def test_real_and_imag():
+    n1 = xdrlib.Float128(2**10000)
+    assert n1.imag == 0
+    assert n1.real == n1
