@@ -101,6 +101,25 @@ def test_instantiation_from_bytes(xdrtype, param, value):
     xdrlib.Float64,
     xdrlib.Float128
 ])
+@pytest.mark.parametrize('value', [
+    (xdrlib.Float32('3.14')),
+    (xdrlib.Float64('3.14')),
+    (xdrlib.Float128('3.14'))
+])
+def test_instantiation_from_XDR_type(xdrtype, value):
+    n = xdrtype(value)
+    assert isinstance(n, xdrtype)
+    if value._fraction_size > xdrtype._fraction_size:
+        assert n == pytest.approx(value, precision[xdrtype])
+    else:
+        assert n == value
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
 @pytest.mark.parametrize('invalid', [
     "  0x3.1  ",
     "  -0x3.p-1  ",
@@ -161,7 +180,7 @@ def test_encoding_for_Float32(value):
 
 @pytest.mark.parametrize('value', [
     float('-inf'),
-    2 ** 1024 - 2 ** (1023-52),
+    2 ** 1024 - 2 ** (1023 - 52),
     2 ** -1022,
     2 ** -1022 - 2 ** -1074,
     2 ** -1074,
@@ -185,8 +204,8 @@ def test_encoding_for_Float64(value):
 
 
 @pytest.mark.parametrize('xdrtype', [
-    xdrlib.Float32,
-    xdrlib.Float64,
+    # xdrlib.Float32,
+    # xdrlib.Float64,
     xdrlib.Float128
 ])
 def test_maximum_value(xdrtype):
@@ -270,6 +289,7 @@ def test_smallest_subnormal_numbers(xdrtype):
         assert n.fraction == 1
         assert xdrtype.decode(n.encode()) == n
 
+
 @pytest.mark.parametrize('xdrtype', [
     xdrlib.Float32,
     xdrlib.Float64,
@@ -345,8 +365,8 @@ def test_is_integer_quadruple_values():
 @pytest.mark.parametrize('hexstr,value', [
     ('0', 0.0),
     ('-0x0.0', -0.0),
-    ('0x1.0000000p10', 2**10),
-    ('0x1.5555555555555555555555555555555555555p-2', 1/3),
+    ('0x1.0000000p10', 2 ** 10),
+    ('0x1.5555555555555555555555555555555555555p-2', '0.333333333333333333333333333333333333333333333333333'),
     ('-inf', '-inf'),
     ('nan', 'nan')
 ])
@@ -356,5 +376,117 @@ def test_fromhex(xdrtype, hexstr, value):
     elif 'inf' in hexstr:
         assert math.isinf(xdrtype.fromhex(hexstr))
     else:
-        assert xdrtype.fromhex(hexstr) == xdrtype(value)
+        n = xdrtype.fromhex(hexstr)
+        assert n == xdrtype(value)
 
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('value', [
+    -0.0,
+    '-inf',
+    -2.0,
+    -3.14
+])
+def test_abs_value(xdrtype, value):
+    n = xdrtype(value)
+    m = abs(n)
+    assert m == -n
+    assert isinstance(m, xdrtype)
+    assert m.signbit == 0
+    assert m.exponent == n.exponent
+    assert m.fraction == m.fraction
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('value', [
+    -0.0,
+    'inf',
+    '-inf',
+    -2.0,
+    3.14
+])
+def test_neg_and_pos_value(xdrtype, value):
+    n = xdrtype(value)
+    m = -n
+    assert m == -n
+    assert isinstance(m, xdrtype)
+    assert m.signbit != n.signbit
+    assert m.exponent == n.exponent
+    assert m.fraction == m.fraction
+    m = +n
+    assert isinstance(m, xdrtype)
+    assert m.signbit == n.signbit
+    assert m.exponent == n.exponent
+    assert m.fraction == m.fraction
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('value, expected', [
+    (-0.0, 0),
+    (-2.5, -2),
+    (3.14, 3)
+])
+def test_int_conversion(xdrtype, value, expected):
+    n = xdrtype(value)
+    assert int(n) == expected
+
+
+def test_int_conversion_for_Float128():
+    i = 2 ** 10000
+    n = xdrlib.Float128(i)
+    assert int(n) == i
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float32,
+    xdrlib.Float64,
+    xdrlib.Float128
+])
+@pytest.mark.parametrize('value,exception', [
+    (float('inf'), OverflowError),
+    (float('nan'), ValueError)
+])
+def test_int_raises_exception_for_inf_and_nan_value(xdrtype, value, exception):
+    n = xdrtype(value)
+    with pytest.raises(exception):
+        int(n)
+
+
+def test_float_conversion():
+    n = xdrlib.Float128(2 ** 10000)
+    assert math.isinf(float(n))
+
+
+def test_comparison():
+    n1 = xdrlib.Float32(1.75)
+    n2 = xdrlib.Float128(1.75)
+    assert n1 == n2
+
+    n1 = xdrlib.Float128(2 ** 10000)
+    n2 = xdrlib.Float128(2 ** 10000)
+    assert n1 == n2
+
+    n1 = xdrlib.Float128(2 ** 10000)
+    n2 = xdrlib.Float128(2 ** 10001)
+    assert n1 < n2
+    assert n2 > n1
+    assert n1 == 2 ** 10000
+    assert n2 > 2 ** 10000
+
+
+def test_real_and_imag():
+    n1 = xdrlib.Float128(2**10000)
+    assert n1.imag == 0
+    assert n1.real == n1
