@@ -13,6 +13,10 @@ class Boolean(Enumeration):
     TRUE = 1
 
 
+# Not strictly necessary, because the above Boolean class definition
+# will have added FALSE and TRUE to this module's global namespace.
+# Explicitly setting them here allows static analyzers, such as typically
+# used by an IDE for code completion, to recognize these values as part of the module.
 FALSE = Boolean.FALSE
 TRUE = Boolean.TRUE
 
