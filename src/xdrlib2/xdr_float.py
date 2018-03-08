@@ -2,7 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrType
+from .xdr_core import XdrAtomic
 from .xdr_integer import XdrInteger
 import numbers
 import re
@@ -10,7 +10,8 @@ import math
 import operator
 
 
-class XdrFloat(XdrType, float):
+class XdrFloat(XdrAtomic, float):
+    _final = False
     _fraction_size = None
     _fraction_mask = None
     _exponent_size = None
@@ -24,8 +25,8 @@ class XdrFloat(XdrType, float):
     _frozen = None
 
     def __init_subclass__(cls, exponent_size=0, fraction_size=0, **kwargs):
-        if cls._frozen is None:
-            cls._frozen = False
+        super().__init_subclass__(**kwargs)
+        if not cls._final:
             if exponent_size < 1:
                 raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
             if fraction_size < 1:
@@ -38,18 +39,17 @@ class XdrFloat(XdrType, float):
                                  f'together are not a multiple of 8 bits')
             cls._packed_size = packed_size
 
-            cls._signbit_class = type('Signbit', (XdrInteger,), {}, size=1)
-            cls._exponent_class = type('Exponent', (XdrInteger,), {}, size=exponent_size)
-            cls._fraction_class = type('Fraction', (XdrInteger,), {}, size=fraction_size)
+            cls._signbit_class = type('Signbit', (XdrInteger,), {}, low=0, high=2)
+            cls._exponent_class = type('Exponent', (XdrInteger,), {}, low=0, high=1<<exponent_size)
+            cls._fraction_class = type('Fraction', (XdrInteger,), {}, low=0, high=1<<fraction_size)
 
             cls._exponent_size = exponent_size
             cls._fraction_size = fraction_size
             cls._fraction_mask = (1 << fraction_size) - 1
             cls._max_exponent = (1 << exponent_size) - 1
             cls._exponent_bias = cls._max_exponent >> 1
-            cls._frozen = True
+            cls._final = True
 
-        super().__init_subclass__(**kwargs)
 
     def __new__(cls, *args):
         if len(args) == 3:
@@ -268,14 +268,15 @@ class XdrFloat(XdrType, float):
         return packed_number.to_bytes(self._packed_size, 'big')
 
     @classmethod
-    def decode(cls, packed):
-        packed_integer = int.from_bytes(packed, 'big')
+    def parse(cls, bstr):
+        size = cls.packed_size()
+        packed_integer = int.from_bytes(bstr[:size], 'big')
         fraction = packed_integer & cls._fraction_mask
         packed_integer >>= cls._fraction_size
         exponent = packed_integer & cls._max_exponent
         packed_integer >>= cls._exponent_size
         signbit = packed_integer & 1
-        return cls(signbit, exponent, fraction)
+        return cls(signbit, exponent, fraction), bstr[size:]
 
     @classmethod
     def fromhex(cls, hexstr):

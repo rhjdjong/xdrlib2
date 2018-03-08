@@ -9,10 +9,12 @@ import itertools
 
 
 class Enumeration(Integer):
+    _final = False
+    _parameter_names = ()
     _enum_map = None
-    _frozen = None
 
     def __init_subclass__(cls, **name_value_map):
+        super().__init_subclass__()
         enum_list = []
         for key, value in itertools.chain(vars(cls).items(), name_value_map.items()):
             enum_value = cls._make_enum_value(key, value)
@@ -30,7 +32,6 @@ class Enumeration(Integer):
             # This is subclassing a concrete enum type with additional items
             raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type with modifications")
 
-        cls._frozen = False
         cls._enum_map = enum_map
 
         framelist = inspect.stack()
@@ -44,8 +45,7 @@ class Enumeration(Integer):
                 raise ValueError(f"duplicate enum identifier name '{name:s}' "
                                  f"in module '{module_ns['__name__']:s}'")
             module_ns[name] = value
-        cls._frozen = True
-        super().__init_subclass__()
+        cls._final = True
 
     @classmethod
     def _make_enum_value(cls, name, value):
