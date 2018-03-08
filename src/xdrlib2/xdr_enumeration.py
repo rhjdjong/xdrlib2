@@ -5,59 +5,53 @@
 from .xdr_integer import Integer
 import re
 import inspect
+import itertools
 
 
-class _XdrMetaEnumeration(type):
-    def __init__(cls, name, bases, ns, **kwargs):
-        cls._enum_map = {}
-        for name, value in list(ns.items()):
-            if not name.startswith('_'):
-                cls._create_enum_item(name, value)
-                del (ns[name])
-        for name, value in kwargs.items():
-            if not name.startswith('_'):
-                cls._create_enum_item(name, value)
-        super().__init__(name, bases, ns)
-        if cls._enum_map:
-            cls._frozen = True
-
-    def __setattr__(cls, name, value):
-        if cls._frozen:
-            raise AttributeError(f"cannot set or modify attributes of '{cls.__name__:s}' enumeration class")
-        super().__setattr__(name, value)
-
-
-class Enumeration(Integer, metaclass=_XdrMetaEnumeration):
+class Enumeration(Integer):
     _enum_map = None
     _frozen = None
 
-    @classmethod
-    def _create_enum_item(cls, name, value):
-        if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name):
-            raise ValueError(f"invalid enum identifier name '{name:s}' in class {cls.__name__:s}")
-        if name in cls._enum_map:
-            raise AttributeError(f"enum identifier name '{name:s}' "
-                                 f"is already present in in class '{cls.__name__:s}'")
-        if name in cls._module_ns:
-            raise AttributeError(f"enum identifier name '{name:s}' "
-                                 f"is already present in module '{__name__:s}'")
-        enum_value = super().__new__(cls, value)
-        cls._enum_map[name] = enum_value
-        setattr(cls, name, enum_value)
-        cls._module_ns[name] = enum_value
-
     def __init_subclass__(cls, **name_value_map):
-        if cls._enum_map:
-            raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type")
+        enum_list = []
+        for key, value in itertools.chain(vars(cls).items(), name_value_map.items()):
+            enum_value = cls._make_enum_value(key, value)
+            if enum_value is not None:
+                enum_list.append((key, enum_value))
+        enum_map = {}
+        for name, value in enum_list:
+            if name in enum_map:
+                raise ValueError(f"duplicate enum identifier name '{name:s}' "
+                                 f"in class '{cls.__name__:s}'")
+            else:
+                enum_map[name] = value
 
-        for attr in list(cls.__dict__):
-            if not attr.startswith('_'):
-                setattr(cls, '_' + attr, getattr(cls, attr))
+        if cls._enum_map and enum_map:
+            # This is subclassing a concrete enum type with additional items
+            raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type with modifications")
+
+        cls._frozen = False
+        cls._enum_map = enum_map
 
         framelist = inspect.stack()
         # framelist[0] is current frame
         # framelist[1] is the calling frame, i.e. the subclass definition
-        cls._module_ns = framelist[1].frame.f_globals
+        module_ns = framelist[1].frame.f_globals
+
+        for name, value in cls._enum_map.items():
+            setattr(cls, name, value)
+            if name in module_ns:
+                raise ValueError(f"duplicate enum identifier name '{name:s}' "
+                                 f"in module '{module_ns['__name__']:s}'")
+            module_ns[name] = value
+        cls._frozen = True
+        super().__init_subclass__()
+
+    @classmethod
+    def _make_enum_value(cls, name, value):
+        if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name):
+            return None
+        return super().__new__(cls, value)
 
     def __new__(cls, value):
         if not cls._enum_map:

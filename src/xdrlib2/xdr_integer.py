@@ -10,17 +10,22 @@ class XdrInteger(XdrType, int):
     _min = None
     _max = None
     _packed_size = None
+    _frozen = None
 
     def __init_subclass__(cls, size=0, signed=False, **kwargs):
         if cls._signed is None:
+            cls._frozen = False
             cls._signed = signed
             if signed:
-                cls._min = -(1 << (size - 1))
-                cls._max = (1 << (size - 1))
+                min = -(1 << (size - 1))
+                max = (1 << (size - 1))
             else:
-                cls._min = 0
-                cls._max = 1 << size
+                min = 0
+                max = 1 << size
+            cls._min = min
+            cls._max = max
             cls._packed_size = size // 8 + (1 if size % 8 else 0)
+            cls._frozen = True
         super().__init_subclass__()
 
     def __new__(cls, value=0):

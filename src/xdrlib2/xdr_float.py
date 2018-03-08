@@ -21,30 +21,35 @@ class XdrFloat(XdrType, float):
     _nstr_pointfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)\.(?P<decpart>\d*)$')
     _nstr_exponentfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)(?:\.(?P<decpart>\d*))[Ee](?P<exp>[+-]?\d+)$')
     _hex_str_re = re.compile(r'^(?:0x)?(?P<intpart>[0-9a-f]+)(?:\.(?P<fraction>[0-9a-f]+))?(?:p(?P<exp>[+-]?\d+))?$')
+    _frozen = None
 
     def __init_subclass__(cls, exponent_size=0, fraction_size=0, **kwargs):
-        if exponent_size < 1:
-            raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
-        if fraction_size < 1:
-            raise ValueError(f'Float subclass requires fraction_size >= 1, got {fraction_size:d}')
+        if cls._frozen is None:
+            cls._frozen = False
+            if exponent_size < 1:
+                raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
+            if fraction_size < 1:
+                raise ValueError(f'Float subclass requires fraction_size >= 1, got {fraction_size:d}')
+
+            bit_size = 1 + exponent_size + fraction_size
+            packed_size = bit_size // 8
+            if bit_size != 8 * packed_size:
+                raise ValueError(f'Sign bit, exponent size {exponent_size:d} and fraction size {fraction_size:d} '
+                                 f'together are not a multiple of 8 bits')
+            cls._packed_size = packed_size
+
+            cls._signbit_class = type('Signbit', (XdrInteger,), {}, size=1)
+            cls._exponent_class = type('Exponent', (XdrInteger,), {}, size=exponent_size)
+            cls._fraction_class = type('Fraction', (XdrInteger,), {}, size=fraction_size)
+
+            cls._exponent_size = exponent_size
+            cls._fraction_size = fraction_size
+            cls._fraction_mask = (1 << fraction_size) - 1
+            cls._max_exponent = (1 << exponent_size) - 1
+            cls._exponent_bias = cls._max_exponent >> 1
+            cls._frozen = True
+
         super().__init_subclass__(**kwargs)
-
-        bit_size = 1 + exponent_size + fraction_size
-        packed_size = bit_size // 8
-        if bit_size != 8 * packed_size:
-            raise ValueError(f'Sign bit, exponent size {exponent_size:d} and fraction size {fraction_size:d} '
-                             f'together are not a multiple of 8 bits')
-        cls._packed_size = packed_size
-
-        cls._signbit_class = type('Signbit', (XdrInteger,), {}, size=1)
-        cls._exponent_class = type('Exponent', (XdrInteger,), {}, size=exponent_size)
-        cls._fraction_class = type('Fraction', (XdrInteger,), {}, size=fraction_size)
-
-        cls._exponent_size = exponent_size
-        cls._fraction_size = fraction_size
-        cls._fraction_mask = (1 << fraction_size) - 1
-        cls._max_exponent = (1 << exponent_size) - 1
-        cls._exponent_bias = cls._max_exponent >> 1
 
     def __new__(cls, *args):
         if len(args) == 3:
