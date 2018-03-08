@@ -28,6 +28,7 @@ def test_default_instantiation_has_all_zero_bytes():
     assert isinstance(x, MyFixedOpaque)
     assert x == b'\0' * 10
 
+
 def test_fixed_length_instantiation_fails_with_wrong_sized_argument():
     with pytest.raises(ValueError):
         MyFixedOpaque(b'too short')
