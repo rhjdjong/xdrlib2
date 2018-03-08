@@ -31,7 +31,7 @@ class XdrInteger(XdrType, int):
                          f"\tAllowed range is [{cls.min():d} .. {cls.max() - 1:d}].")
 
     def encode(self):
-        return self.to_bytes(self.size(), 'big', signed=self.signed())
+        return self.to_bytes(self.packed_size(), 'big', signed=self.signed())
 
     @classmethod
     def decode(cls, packed):
@@ -50,7 +50,7 @@ class XdrInteger(XdrType, int):
         return cls._min
 
     @classmethod
-    def size(cls):
+    def packed_size(cls):
         return cls._packed_size
 
     @classmethod
