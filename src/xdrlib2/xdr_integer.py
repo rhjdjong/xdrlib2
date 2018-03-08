@@ -2,26 +2,19 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrType
+from .xdr_core import XdrAtomic
 
 
-class XdrInteger(XdrType, int):
-    _signed = None
-    _min = None
-    _max = None
-    _packed_size = None
+class XdrInteger(XdrAtomic, int):
+    _parameter_names = ('low', 'high')
 
-    def __init_subclass__(cls, size=0, signed=False, **kwargs):
-        if cls._signed is None:
-            cls._signed = signed
-            if signed:
-                cls._min = -(1 << (size - 1))
-                cls._max = (1 << (size - 1))
-            else:
-                cls._min = 0
-                cls._max = 1 << size
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not cls._final and cls._parameter_names and \
+                all(hasattr(cls, '_' + name) for name in cls._parameter_names):
+            size = (cls.max() - cls.min()).bit_length() - 1
             cls._packed_size = size // 8 + (1 if size % 8 else 0)
-        super().__init_subclass__()
+            cls._final = True
 
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
@@ -34,52 +27,49 @@ class XdrInteger(XdrType, int):
         return self.to_bytes(self.packed_size(), 'big', signed=self.signed())
 
     @classmethod
-    def decode(cls, packed):
-        v = int.from_bytes(packed, 'big', signed=cls.signed())
-        return cls(v)
+    def parse(cls, bstr):
+        size = cls.packed_size()
+        v = int.from_bytes(bstr[:size], 'big', signed=cls.signed())
+        return cls(v), bstr[size:]
 
     def __repr__(self):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
 
     @classmethod
     def max(cls):
-        return cls._max
+        return cls._high
 
     @classmethod
     def min(cls):
-        return cls._min
-
-    @classmethod
-    def packed_size(cls):
-        return cls._packed_size
+        return cls._low
 
     @classmethod
     def signed(cls):
-        return cls._signed
+        return cls.min() < 0
 
 
-class Int32(XdrInteger, size=32, signed=True):
+class Int32(XdrInteger, low=-1<<31, high=1<<31):
     pass
 
 
 Integer = Int32
 
 
-class Int32u(XdrInteger, size=32, signed=False):
+class Int32u(XdrInteger, low=0, high=1<<32):
     pass
 
 
 UnsignedInteger = Int32u
 
 
-class Int64(XdrInteger, size=64, signed=True):
+class Int64(XdrInteger, low=-1<<63, high=1<<63):
     pass
 
 
 Hyper = Int64
 
 
-class Int64u(XdrInteger, size=64, signed=False):
+class Int64u(XdrInteger, low=0, high=1<<64):
     pass
 
 
