@@ -13,6 +13,9 @@ class MyFixedOpaque(xdrlib.FixedOpaque, size=10):
 class MyVarOpaque(xdrlib.VarOpaque):
     size = 10
 
+class MyString(xdrlib.String):
+    size = 10
+
 
 def test_fixed_length_opaque_through_argument():
     byte_seq = b'0123456789'
@@ -27,23 +30,37 @@ def test_fixed_length_opaque_through_argument():
     assert n.encode() == p
 
 
-def test_var_length_opaque_through_argument():
+@pytest.mark.parametrize('xdrtype', [
+    MyVarOpaque,
+    MyString
+])
+def test_var_length_opaque_through_argument(xdrtype):
     byte_seq = b'0123456789'
-    x = MyVarOpaque(byte_seq)
-    assert isinstance(x, MyVarOpaque)
+    x = xdrtype(byte_seq)
+    assert isinstance(x, xdrtype)
     assert x == byte_seq
     p = x.encode()
     assert p == b'\0\0\0\x0a' + byte_seq + b'\0\0'
-    n = MyVarOpaque.decode(p)
-    assert isinstance(n, MyVarOpaque)
+    n = xdrtype.decode(p)
+    assert isinstance(n, xdrtype)
     assert n == x
     assert n.encode() == p
 
 
-def test_default_instantiation_has_all_zero_bytes():
+def test_default_instantiation_fixed_opaque_has_all_zero_bytes():
     x = MyFixedOpaque()
     assert isinstance(x, MyFixedOpaque)
     assert x == b'\0' * 10
+
+
+@pytest.mark.parametrize('xdrtype', [
+    MyVarOpaque,
+    MyString
+])
+def test_default_instantiation_variable_is_empty_bytes(xdrtype):
+    x = xdrtype()
+    assert x == b''
+    assert x.encode() == b'\0\0\0\0'
 
 
 def test_fixed_length_instantiation_fails_with_wrong_sized_argument():
@@ -99,8 +116,12 @@ def test_modifying_length_fails_for_fixed_size_opaque():
         b.clear()
 
 
-def test_substring_modification_works_for_variable_size_opaque():
-    b = MyVarOpaque(b'abcde')
+@pytest.mark.parametrize('xdrtype', [
+    MyVarOpaque,
+    MyString
+])
+def test_substring_modification_works_for_variable_length(xdrtype):
+    b = xdrtype(b'abcde')
     b[3:5] = b'xyz12'
     assert b == b'abcxyz12'
     b[-1] = 0x33
@@ -125,8 +146,12 @@ def test_substring_modification_works_for_variable_size_opaque():
     assert b == b'0235'
 
 
-def test_substring_modification_fails_if_size_exceeds_maximum_length():
-    b = MyVarOpaque(b'abcde')
+@pytest.mark.parametrize('xdrtype', [
+    MyVarOpaque,
+    MyString
+])
+def test_substring_modification_fails_if_size_exceeds_maximum_length(xdrtype):
+    b = xdrtype(b'abcde')
     with pytest.raises(ValueError):
         b[3:5] = b'xyz123456'
     with pytest.raises(ValueError):
@@ -145,7 +170,8 @@ def test_substring_modification_fails_if_size_exceeds_maximum_length():
 
 @pytest.mark.parametrize('seqtype', [
     MyFixedOpaque,
-    MyVarOpaque
+    MyVarOpaque,
+    MyString
 ])
 @pytest.mark.parametrize('invalid', [
     None,
@@ -163,7 +189,8 @@ def test_item_replacement_fails_with_wrong_data_type(seqtype, invalid):
 
 @pytest.mark.parametrize('seqtype', [
     MyFixedOpaque,
-    MyVarOpaque
+    MyVarOpaque,
+    MyString
 ])
 @pytest.mark.parametrize('invalid', [
     None,

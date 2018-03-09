@@ -27,6 +27,12 @@ class XdrFloat(XdrAtomic, float):
     def __init_subclass__(cls, exponent_size=0, fraction_size=0, **kwargs):
         super().__init_subclass__(**kwargs)
         if not cls._final:
+            if exponent_size == 0 and hasattr(cls, 'exponent_size'):
+                exponent_size = cls.exponent_size
+                del cls.exponent_size
+            if fraction_size == 0 and hasattr(cls, 'fraction_size'):
+                fraction_size = cls.fraction_size
+                del cls.fraction_size
             if exponent_size < 1:
                 raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
             if fraction_size < 1:
@@ -443,22 +449,13 @@ class XdrFloat(XdrAtomic, float):
         return self._cmp(other, operator.gt)
 
 
-class Float32(XdrFloat, exponent_size=8, fraction_size=23):
-    pass
-
-
+Float32 = XdrFloat.typedef('Float32', exponent_size=8, fraction_size=23)
 Float = Float32
 
 
-class Float64(XdrFloat, exponent_size=11, fraction_size=52):
-    pass
-
-
+Float64 = XdrFloat.typedef('Float64', exponent_size=11, fraction_size=52)
 Double = Float64
 
 
-class Float128(XdrFloat, exponent_size=15, fraction_size=112):
-    pass
-
-
+Float128 = XdrFloat.typedef('Float128', exponent_size=15, fraction_size=112)
 Quadruple = Float128

@@ -150,13 +150,12 @@ class XdrOpaque(XdrSequence, bytearray):
         return cls(data), bstr[padded_size:]
 
 
-class FixedOpaque(XdrOpaque):
-    _variable = False
+FixedOpaque = XdrOpaque.typedef('FixedOpaque', _variable=False)
 
+VarOpaque = XdrOpaque.typedef('VarOpaque', _variable=True)
 
+String = XdrOpaque.typedef('String', _variable=True)
 
-class VarOpaque(XdrOpaque):
-    _variable = True
 
 
 

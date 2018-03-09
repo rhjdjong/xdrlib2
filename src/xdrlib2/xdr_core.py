@@ -67,6 +67,12 @@ class XdrType(metaclass=_MetaXdrType):
             raise ValueError("non-zero padding byte(s) encountered: '{bstr[size:].encode('utf8'):s}'")
         return bstr[:size]
 
+    @classmethod
+    def typedef(cls, name=None, **kwargs):
+        type_name = name if name else '_'
+        new_type = type(type_name, (cls,), kwargs)
+        return new_type
+
 
 class XdrAtomic(XdrType):
     _packed_size = None

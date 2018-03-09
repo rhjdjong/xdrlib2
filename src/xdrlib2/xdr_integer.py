@@ -48,29 +48,17 @@ class XdrInteger(XdrAtomic, int):
         return cls.min() < 0
 
 
-class Int32(XdrInteger, low=-1<<31, high=1<<31):
-    pass
-
-
+Int32 = XdrInteger.typedef('Int32', low=-1<<31, high=1<<31)
 Integer = Int32
 
 
-class Int32u(XdrInteger, low=0, high=1<<32):
-    pass
-
-
+Int32u = XdrInteger.typedef('Int32u', low=0, high=1<<32)
 UnsignedInteger = Int32u
 
 
-class Int64(XdrInteger, low=-1<<63, high=1<<63):
-    pass
-
-
+Int64 = XdrInteger.typedef('Int64', low=-1<<63, high=1<<63)
 Hyper = Int64
 
 
-class Int64u(XdrInteger, low=0, high=1<<64):
-    pass
-
-
+Int64u = XdrInteger.typedef('Int64u', low=0, high=1<<64)
 UnsignedHyper = Int64u
