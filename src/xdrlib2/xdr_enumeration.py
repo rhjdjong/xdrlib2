@@ -35,8 +35,14 @@ class Enumeration(Integer):
 
         framelist = inspect.stack()
         # framelist[0] is current frame
-        # framelist[1] is the calling frame, i.e. the subclass definition
-        module_ns = framelist[1].frame.f_globals
+        # framelist[1] is the calling frame, i.e. the subclass definition,
+        # unless it is the 'typedef' classmethod. In that case
+        # the module must be derived from the next calling frame
+        if framelist[1].function == 'typedef':
+            frame_info = framelist[2]
+        else:
+            frame_info = framelist[1]
+        module_ns = frame_info.frame.f_globals
 
         for name, value in cls._enum_map.items():
             setattr(cls, name, value)

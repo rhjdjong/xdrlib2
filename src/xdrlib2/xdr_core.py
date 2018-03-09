@@ -14,3 +14,7 @@ class XdrType(metaclass=_MetaXdrType):
     _frozen = True
 
 
+    @classmethod
+    def typedef(cls, **kwargs):
+        return type("_", (cls,), kwargs)
+
