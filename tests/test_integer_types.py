@@ -56,3 +56,17 @@ def test_packing_and_unpacking(xdrtype, values, packed):
         x = xdrtype.decode(p)
         assert x == v
         assert isinstance(x, xdrtype)
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Integer,
+    xdrlib.UnsignedInteger,
+    xdrlib.Hyper,
+    xdrlib.UnsignedHyper
+])
+def test_cannot_modify_parameters_of_integer_types(xdrtype):
+    with pytest.raises(AttributeError):
+        xdrtype.new_attribute = 3
+    with pytest.raises(AttributeError):
+        xdrtype._max = 0
+    with pytest.raises(AttributeError):
+        del xdrtype._min

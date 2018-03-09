@@ -4,10 +4,19 @@
 
 
 class _MetaXdrType(type):
+    # Concrete XDR types contain parameters that determine the
+    # allowed values and operations.
+    # To prevent inadvertent modifications of these parameters,
+    # creating, modifying, or deleting these parameters is not allowed.
     def __setattr__(cls, name, value):
         if cls._final:
             raise AttributeError(f"cannot set attribute '{name:s}' to '{value}' for class '{cls.__name__:s}'")
         super().__setattr__(name, value)
+
+    def __delattr__(cls, name):
+        if cls._final:
+            raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
+        super().__delattr__(name)
 
 
 class XdrType(metaclass=_MetaXdrType):
@@ -46,7 +55,7 @@ class XdrType(metaclass=_MetaXdrType):
 
     @staticmethod
     def padding(size):
-        return b'\0' * ((size % 4) % 4)
+        return b'\0' * ((4 - size % 4) % 4)
 
     @staticmethod
     def padded_size(size):
