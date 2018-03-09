@@ -2,7 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrType
+from .xdr_core import XdrAtomic
 from .xdr_integer import XdrInteger
 import numbers
 import re
@@ -10,7 +10,8 @@ import math
 import operator
 
 
-class XdrFloat(XdrType, float):
+class XdrFloat(XdrAtomic, float):
+    _final = False
     _fraction_size = None
     _fraction_mask = None
     _exponent_size = None
@@ -21,11 +22,16 @@ class XdrFloat(XdrType, float):
     _nstr_pointfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)\.(?P<decpart>\d*)$')
     _nstr_exponentfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)(?:\.(?P<decpart>\d*))[Ee](?P<exp>[+-]?\d+)$')
     _hex_str_re = re.compile(r'^(?:0x)?(?P<intpart>[0-9a-f]+)(?:\.(?P<fraction>[0-9a-f]+))?(?:p(?P<exp>[+-]?\d+))?$')
-    _frozen = None
 
     def __init_subclass__(cls, exponent_size=0, fraction_size=0, **kwargs):
-        if cls._frozen is None:
-            cls._frozen = False
+        super().__init_subclass__(**kwargs)
+        if not cls._final:
+            if exponent_size == 0 and hasattr(cls, 'exponent_size'):
+                exponent_size = cls.exponent_size
+                del cls.exponent_size
+            if fraction_size == 0 and hasattr(cls, 'fraction_size'):
+                fraction_size = cls.fraction_size
+                del cls.fraction_size
             if exponent_size < 1:
                 raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
             if fraction_size < 1:
@@ -38,18 +44,17 @@ class XdrFloat(XdrType, float):
                                  f'together are not a multiple of 8 bits')
             cls._packed_size = packed_size
 
-            cls._signbit_class = type('Signbit', (XdrInteger,), {}, size=1)
-            cls._exponent_class = type('Exponent', (XdrInteger,), {}, size=exponent_size)
-            cls._fraction_class = type('Fraction', (XdrInteger,), {}, size=fraction_size)
+            cls._signbit_class = type('Signbit', (XdrInteger,), {}, low=0, high=2)
+            cls._exponent_class = type('Exponent', (XdrInteger,), {}, low=0, high=1<<exponent_size)
+            cls._fraction_class = type('Fraction', (XdrInteger,), {}, low=0, high=1<<fraction_size)
 
             cls._exponent_size = exponent_size
             cls._fraction_size = fraction_size
             cls._fraction_mask = (1 << fraction_size) - 1
             cls._max_exponent = (1 << exponent_size) - 1
             cls._exponent_bias = cls._max_exponent >> 1
-            cls._frozen = True
+            cls._final = True
 
-        super().__init_subclass__(**kwargs)
 
     def __new__(cls, *args):
         if len(args) == 3:
@@ -268,14 +273,15 @@ class XdrFloat(XdrType, float):
         return packed_number.to_bytes(self._packed_size, 'big')
 
     @classmethod
-    def decode(cls, packed):
-        packed_integer = int.from_bytes(packed, 'big')
+    def parse(cls, bstr):
+        size = cls.packed_size()
+        packed_integer = int.from_bytes(bstr[:size], 'big')
         fraction = packed_integer & cls._fraction_mask
         packed_integer >>= cls._fraction_size
         exponent = packed_integer & cls._max_exponent
         packed_integer >>= cls._exponent_size
         signbit = packed_integer & 1
-        return cls(signbit, exponent, fraction)
+        return cls(signbit, exponent, fraction), bstr[size:]
 
     @classmethod
     def fromhex(cls, hexstr):
@@ -442,22 +448,13 @@ class XdrFloat(XdrType, float):
         return self._cmp(other, operator.gt)
 
 
-class Float32(XdrFloat, exponent_size=8, fraction_size=23):
-    pass
-
-
+Float32 = XdrFloat.typedef('Float32', exponent_size=8, fraction_size=23)
 Float = Float32
 
 
-class Float64(XdrFloat, exponent_size=11, fraction_size=52):
-    pass
-
-
+Float64 = XdrFloat.typedef('Float64', exponent_size=11, fraction_size=52)
 Double = Float64
 
 
-class Float128(XdrFloat, exponent_size=15, fraction_size=112):
-    pass
-
-
+Float128 = XdrFloat.typedef('Float128', exponent_size=15, fraction_size=112)
 Quadruple = Float128

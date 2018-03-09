@@ -31,3 +31,13 @@ def test_typedef_for_enumeration():
     assert new_enum_type('TWO') == 2
     assert current_module.THREE == 3
 
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.FixedOpaque,
+    xdrlib.VarOpaque,
+    xdrlib.String
+])
+def test_typedef_for_opaque_and_string(xdrtype):
+    new_type = xdrtype.typedef(size=20)
+    assert issubclass(new_type, xdrtype)
+    assert new_type.size() == 20

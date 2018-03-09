@@ -491,3 +491,17 @@ def test_real_and_imag():
     n1 = xdrlib.Quadruple(2**10000)
     assert n1.imag == 0
     assert n1.real == n1
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
+])
+def test_float_types_cannot_be_modified(xdrtype):
+    with pytest.raises(AttributeError):
+        xdrtype.new_attribute = 1
+    with pytest.raises(AttributeError):
+        xdrtype._fraction_size = 3
+    with pytest.raises(AttributeError):
+        del xdrtype._exponent_bias

@@ -95,6 +95,11 @@ def test_cannot_modify_enumeration_identifiers():
         Colors.RED = 4
 
 
+def test_cannot_delete_enumeration_identifiers():
+    with pytest.raises(AttributeError):
+        del Colors.BLUE
+
+
 def test_packing_of_enumerations():
     p = Colors.RED.encode()
     assert p == b'\0\0\0\x02'

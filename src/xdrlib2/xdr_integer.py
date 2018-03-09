@@ -2,74 +2,63 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrType
+from .xdr_core import XdrAtomic
 
 
-class XdrInteger(XdrType, int):
-    _signed = None
-    _min = None
-    _max = None
-    _packed_size = None
-    _frozen = None
+class XdrInteger(XdrAtomic, int):
+    _parameter_names = ('low', 'high')
 
-    def __init_subclass__(cls, size=0, signed=False, **kwargs):
-        if cls._signed is None:
-            cls._frozen = False
-            cls._signed = signed
-            if signed:
-                min = -(1 << (size - 1))
-                max = (1 << (size - 1))
-            else:
-                min = 0
-                max = 1 << size
-            cls._min = min
-            cls._max = max
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not cls._final and cls._parameter_names and \
+                all(hasattr(cls, '_' + name) for name in cls._parameter_names):
+            size = (cls.max() - cls.min()).bit_length() - 1
             cls._packed_size = size // 8 + (1 if size % 8 else 0)
-            cls._frozen = True
-        super().__init_subclass__()
+            cls._final = True
 
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
-        if cls._min <= v < cls._max:
+        if cls.min() <= v < cls.max():
             return v
         raise ValueError(f"Value {value!r} is out of range for class {cls.__name__}.\n"
-                         f"\tAllowed range is [{cls._min:d} .. {cls._max - 1:d}].")
+                         f"\tAllowed range is [{cls.min():d} .. {cls.max() - 1:d}].")
 
     def encode(self):
-        return self.to_bytes(self._packed_size, 'big', signed=self._signed)
+        return self.to_bytes(self.packed_size(), 'big', signed=self.signed())
 
     @classmethod
-    def decode(cls, packed):
-        v = int.from_bytes(packed, 'big', signed=cls._signed)
-        return cls(v)
+    def parse(cls, bstr):
+        size = cls.packed_size()
+        v = int.from_bytes(bstr[:size], 'big', signed=cls.signed())
+        return cls(v), bstr[size:]
 
     def __repr__(self):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
 
+    @classmethod
+    def max(cls):
+        return cls._high
 
-class Int32(XdrInteger, size=32, signed=True):
-    pass
+    @classmethod
+    def min(cls):
+        return cls._low
+
+    @classmethod
+    def signed(cls):
+        return cls.min() < 0
 
 
+Int32 = XdrInteger.typedef('Int32', low=-1<<31, high=1<<31)
 Integer = Int32
 
 
-class Int32u(XdrInteger, size=32, signed=False):
-    pass
-
-
+Int32u = XdrInteger.typedef('Int32u', low=0, high=1<<32)
 UnsignedInteger = Int32u
 
 
-class Int64(XdrInteger, size=64, signed=True):
-    pass
-
-
+Int64 = XdrInteger.typedef('Int64', low=-1<<63, high=1<<63)
 Hyper = Int64
 
 
-class Int64u(XdrInteger, size=64, signed=False):
-    pass
-
-
+Int64u = XdrInteger.typedef('Int64u', low=0, high=1<<64)
 UnsignedHyper = Int64u
