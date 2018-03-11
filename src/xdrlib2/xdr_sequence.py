@@ -11,14 +11,9 @@ from .xdr_integer import UnsignedInteger
 class XdrSequence(XdrType):
     _variable = None
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls._final and hasattr(cls, '_parameter_names') and \
-                all(hasattr(cls, '_' + name) for name in cls._parameter_names):
-            if not isinstance(cls._variable, bool):
-                raise NotImplementedError(f"attribute '_variable' must be True or False"
-                                          f"in XDR sequence type '{cls._name:s}'")
-            cls._final = True
+    @classmethod
+    def _init_concrete_subclass(cls, **kwargs):
+        return True, kwargs
 
     @classmethod
     def _verify_size(cls, size):

@@ -24,27 +24,38 @@ class XdrType(metaclass=_MetaXdrType):
 
     def __init_subclass__(cls, **kwargs):
         if hasattr(cls, '_parameter_names'):
-            parameters = {}
-            var_map = vars(cls)
+            modified = False
+
+            # Check for parameters defined in the body of this class
             for name in cls._parameter_names:
-                if name in var_map:
-                    parameters[name] = var_map[name]
+                if name in vars(cls) and not callable(getattr(cls, name)):
+                    setattr(cls, '_' + name, vars(cls)[name])
                     delattr(cls, name)
-                if '_' + name in var_map:
-                    parameters[name] = var_map['_' + name]
+                    modified = True
+
+            # Parameters in kwargs override parameters in the (super)class body
             for name in cls._parameter_names:
-                kw_value = kwargs.get(name)
-                if parameters.get(name) is None:
-                    if kw_value is not None:
-                        parameters[name] = kw_value
+                try:
+                    kw_value = kwargs.pop(name)
+                except KeyError:
+                    pass
                 else:
-                    if kw_value is not None:
-                        raise TypeError(f"'{cls.__name__:s}' subclass has multiple '{name:s}' parameters")
-            if cls._final and parameters:
-                raise TypeError(f"'{cls.__name__:s}' class cannot be subclassed with modifications")
-            for name, value in parameters.items():
-                setattr(cls, '_' + name, value)
-        super().__init_subclass__()
+                    setattr(cls, '_' + name, kw_value)
+                    modified = True
+
+            if cls._final and modified:
+                raise TypeError(f"final class '{cls.__name__:s}' "
+                                f"cannot be subclassed with modifications")
+
+            if not cls._final and all(vars(cls).get('_' + name) is not None for name in cls._parameter_names):
+                cls._final, kwargs = cls._init_concrete_subclass(**kwargs)
+
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def _init_concrete_subclass(cls, **kwargs):
+        raise NotImplementedError(f"concrete subclass '{cls.__name__:s}'"
+                                  f"must override class method '_init_concrete_subclass'")
 
     @classmethod
     def decode(cls, bstr):

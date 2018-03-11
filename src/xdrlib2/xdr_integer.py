@@ -6,15 +6,13 @@ from .xdr_core import XdrAtomic
 
 
 class XdrInteger(XdrAtomic, int):
-    _parameter_names = ('low', 'high')
+    _parameter_names = ('min', 'max')
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not cls._final and cls._parameter_names and \
-                all(hasattr(cls, '_' + name) for name in cls._parameter_names):
-            size = (cls.max() - cls.min()).bit_length() - 1
-            cls._packed_size = size // 8 + (1 if size % 8 else 0)
-            cls._final = True
+    @classmethod
+    def _init_concrete_subclass(cls, **kwargs):
+        size = (cls.max() - cls.min()).bit_length() - 1
+        cls._packed_size = size // 8 + (1 if size % 8 else 0)
+        return True, kwargs
 
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
@@ -37,28 +35,28 @@ class XdrInteger(XdrAtomic, int):
 
     @classmethod
     def max(cls):
-        return cls._high
+        return cls._max
 
     @classmethod
     def min(cls):
-        return cls._low
+        return cls._min
 
     @classmethod
     def signed(cls):
         return cls.min() < 0
 
 
-Int32 = XdrInteger.typedef('Int32', low=-1<<31, high=1<<31)
+Int32 = XdrInteger.typedef('Int32', min=-1<<31, max=1<<31)
 Integer = Int32
 
 
-Int32u = XdrInteger.typedef('Int32u', low=0, high=1<<32)
+Int32u = XdrInteger.typedef('Int32u', min=0, max=1<<32)
 UnsignedInteger = Int32u
 
 
-Int64 = XdrInteger.typedef('Int64', low=-1<<63, high=1<<63)
+Int64 = XdrInteger.typedef('Int64', min=-1<<63, max=1<<63)
 Hyper = Int64
 
 
-Int64u = XdrInteger.typedef('Int64u', low=0, high=1<<64)
+Int64u = XdrInteger.typedef('Int64u', min=0, max=1<<64)
 UnsignedHyper = Int64u
