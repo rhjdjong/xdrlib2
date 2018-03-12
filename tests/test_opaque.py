@@ -71,7 +71,7 @@ def test_fixed_length_instantiation_fails_with_wrong_sized_argument():
 
 
 def test_subclassing_with_size_failse():
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         class InvalidSubClass(MyFixedOpaque, size=5):
             pass
 

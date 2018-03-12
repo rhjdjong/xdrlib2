@@ -11,14 +11,16 @@ import operator
 
 
 class XdrFloat(XdrAtomic, float):
-    _parameter_names = ('exponent_size', 'fraction_size')
+    _parameters = {'exponent_size': None, 'fraction_size': None}
 
     _final = False
-    _fraction_size = None
-    _fraction_mask = None
-    _exponent_size = None
-    _max_exponent = None
-    _exponent_bias = None
+
+    fraction_size = None
+    fraction_mask = None
+    exponent_size = None
+    max_exponent = None
+    exponent_bias = None
+
     _packed_size = None
     _spec_re = re.compile(r'^[+-]?(?:(?P<inf>inf(?:inity)?)|(?P<nan>nan)(?P<payload>\d*))$')
     _nstr_pointfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)\.(?P<decpart>\d*)$')
@@ -27,31 +29,33 @@ class XdrFloat(XdrAtomic, float):
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
+        cls.exponent_size = cls._parameters['exponent_size']
+        cls.fraction_size = cls._parameters['fraction_size']
         # if exponent_size == 0 and hasattr(cls, 'exponent_size'):
         #     exponent_size = cls.exponent_size
         #     del cls.exponent_size
         # if fraction_size == 0 and hasattr(cls, 'fraction_size'):
         #     fraction_size = cls.fraction_size
         #     del cls.fraction_size
-        if cls._exponent_size < 1:
-            raise ValueError(f'Float subclass requires exponent_size >= 1, got {cls._exponent_size:d}')
-        if cls._fraction_size < 1:
-            raise ValueError(f'Float subclass requires fraction_size >= 1, got {cls._fraction_size:d}')
+        if cls.exponent_size < 1:
+            raise ValueError(f'Float subclass requires exponent_size >= 1, got {cls.exponent_size:d}')
+        if cls.fraction_size < 1:
+            raise ValueError(f'Float subclass requires fraction_size >= 1, got {cls.fraction_size:d}')
 
-        bit_size = 1 + cls._exponent_size + cls._fraction_size
+        bit_size = 1 + cls.exponent_size + cls.fraction_size
         packed_size = bit_size // 8
         if bit_size != 8 * packed_size:
-            raise ValueError(f'Sign bit, exponent size {cls._exponent_size:d} and fraction size {cls._fraction_size:d} '
+            raise ValueError(f'Sign bit, exponent size {cls.exponent_size:d} and fraction size {cls.fraction_size:d} '
                              f'together are not a multiple of 8 bits')
         cls._packed_size = packed_size
 
         cls._signbit_class = type('Signbit', (XdrInteger,), {}, min=0, max=2)
-        cls._exponent_class = type('Exponent', (XdrInteger,), {}, min=0, max=1 << cls._exponent_size)
-        cls._fraction_class = type('Fraction', (XdrInteger,), {}, min=0, max=1 << cls._fraction_size)
+        cls._exponent_class = type('Exponent', (XdrInteger,), {}, min=0, max=1 << cls.exponent_size)
+        cls._fraction_class = type('Fraction', (XdrInteger,), {}, min=0, max=1 << cls.fraction_size)
 
-        cls._fraction_mask = (1 << cls._fraction_size) - 1
-        cls._max_exponent = (1 << cls._exponent_size) - 1
-        cls._exponent_bias = cls._max_exponent >> 1
+        cls.fraction_mask = (1 << cls.fraction_size) - 1
+        cls.max_exponent = (1 << cls.exponent_size) - 1
+        cls.exponent_bias = cls.max_exponent >> 1
         return True, kwargs
 
     def __new__(cls, *args):
@@ -73,7 +77,7 @@ class XdrFloat(XdrAtomic, float):
         else:
             raise TypeError(f"Invalid number of arguments for instantiation of '{cls.__name__:s}'")
 
-        if exponent == cls._max_exponent:
+        if exponent == cls.max_exponent:
             if fraction == 0:
                 value = '-inf' if signbit else 'inf'
             else:
@@ -82,11 +86,11 @@ class XdrFloat(XdrAtomic, float):
             if fraction == 0:
                 value = -0.0 if signbit else 0.0
             else:
-                value = (-1 if signbit else 1) * fraction * 2 ** (1 - cls._exponent_bias - cls._fraction_size)
+                value = (-1 if signbit else 1) * fraction * 2 ** (1 - cls.exponent_bias - cls.fraction_size)
         else:
             try:
-                value = (-1 if signbit else 1) * (1 + fraction * 2 ** (-cls._fraction_size)) \
-                        * 2 ** (exponent - cls._exponent_bias)
+                value = (-1 if signbit else 1) * (1 + fraction * 2 ** (-cls.fraction_size)) \
+                        * 2 ** (exponent - cls.exponent_bias)
             except OverflowError:
                 value = '-inf' if signbit else 'inf'
 
@@ -99,19 +103,19 @@ class XdrFloat(XdrAtomic, float):
     @classmethod
     def _extract_from_xdr_instance(cls, value):
         signbit = value.signbit
-        if value.exponent == value._max_exponent:
-            exponent = cls._max_exponent
-            fraction = 0 if value.fraction == 0 else 1 << (cls._fraction_size - 1)
+        if value.exponent == value.max_exponent:
+            exponent = cls.max_exponent
+            fraction = 0 if value.fraction == 0 else 1 << (cls.fraction_size - 1)
         elif value.exponent == 0 and value.fraction == 0:
             exponent = 0
             fraction = 0
         else:
             if value.exponent == 0:
-                exponent = 1 - value._exponent_bias - value._fraction_size
+                exponent = 1 - value.exponent_bias - value.fraction_size
                 coefficient = value.fraction
             else:
-                exponent = value.exponent - value._exponent_bias - value._fraction_size
-                coefficient = (1 << value._fraction_size) + value.fraction
+                exponent = value.exponent - value.exponent_bias - value.fraction_size
+                coefficient = (1 << value.fraction_size) + value.fraction
             if exponent >= 0:
                 numerator = coefficient << exponent
                 denominator = 1
@@ -130,11 +134,11 @@ class XdrFloat(XdrAtomic, float):
         value = abs(value)
         if not isinstance(value, numbers.Integral) and not math.isfinite(value):
             if math.isinf(value):
-                exponent = cls._max_exponent
+                exponent = cls.max_exponent
                 fraction = 0
             else:  # math.isnan(value)
-                exponent = cls._max_exponent
-                fraction = 1 << (cls._fraction_size - 1)
+                exponent = cls.max_exponent
+                fraction = 1 << (cls.fraction_size - 1)
         elif value == 0:
             exponent = 0
             fraction = 0
@@ -155,12 +159,12 @@ class XdrFloat(XdrAtomic, float):
 
         m = cls._spec_re.match(numstr.lower())
         if m:
-            exponent = cls._max_exponent
+            exponent = cls.max_exponent
             if m['inf']:
                 fraction = 0
             else:
                 payload = m['payload']
-                fraction = payload if payload else 1 << (cls._fraction_size - 1)
+                fraction = payload if payload else 1 << (cls.fraction_size - 1)
             return signbit, exponent, fraction
 
         m = cls._nstr_pointfloat_re.match(numstr)
@@ -212,15 +216,15 @@ class XdrFloat(XdrAtomic, float):
             assert (denominator << exponent) <= numerator < (denominator << (exponent + 1))
         else:
             assert denominator <= (numerator << -exponent) < (denominator << 1)
-        if exponent <= -cls._exponent_bias:
-            n = numerator * (1 << (cls._fraction_size + cls._exponent_bias - 1))
+        if exponent <= -cls.exponent_bias:
+            n = numerator * (1 << (cls.fraction_size + cls.exponent_bias - 1))
             d = denominator
-        elif exponent <= cls._fraction_size:
-            n = (numerator << (cls._fraction_size - exponent)) - (denominator << cls._fraction_size)
+        elif exponent <= cls.fraction_size:
+            n = (numerator << (cls.fraction_size - exponent)) - (denominator << cls.fraction_size)
             d = denominator
         else:
             n = numerator - (denominator << exponent)
-            d = denominator << (exponent - cls._fraction_size)
+            d = denominator << (exponent - cls.fraction_size)
 
         fraction, remainder = divmod(n, d)
         if 2 * remainder > d:
@@ -228,22 +232,22 @@ class XdrFloat(XdrAtomic, float):
         elif 2 * remainder == d:
             fraction += fraction % 2
 
-        exponent += cls._exponent_bias
+        exponent += cls.exponent_bias
         if exponent < 0:
             exponent = 0
-        if fraction.bit_length() > cls._fraction_size:
+        if fraction.bit_length() > cls.fraction_size:
             if exponent == 0:
                 exponent = 1
                 fraction = 0
             else:
-                fraction += (1 << cls._fraction_size)
+                fraction += (1 << cls.fraction_size)
                 fraction >>= 1
                 exponent += 1
-        assert fraction.bit_length() <= cls._fraction_size
+        assert fraction.bit_length() <= cls.fraction_size
 
-        if exponent > cls._max_exponent:
+        if exponent > cls.max_exponent:
             fraction = 0
-            exponent = cls._max_exponent
+            exponent = cls.max_exponent
         return exponent, fraction
 
     @property
@@ -264,9 +268,9 @@ class XdrFloat(XdrAtomic, float):
 
     def encode(self):
         packed_number = self.signbit
-        packed_number <<= self._exponent_size
+        packed_number <<= self.exponent_size
         packed_number |= self.exponent
-        packed_number <<= self._fraction_size
+        packed_number <<= self.fraction_size
         packed_number |= self.fraction
         return packed_number.to_bytes(self._packed_size, 'big')
 
@@ -274,10 +278,10 @@ class XdrFloat(XdrAtomic, float):
     def parse(cls, bstr):
         size = cls.packed_size()
         packed_integer = int.from_bytes(bstr[:size], 'big')
-        fraction = packed_integer & cls._fraction_mask
-        packed_integer >>= cls._fraction_size
-        exponent = packed_integer & cls._max_exponent
-        packed_integer >>= cls._exponent_size
+        fraction = packed_integer & cls.fraction_mask
+        packed_integer >>= cls.fraction_size
+        exponent = packed_integer & cls.max_exponent
+        packed_integer >>= cls.exponent_size
         signbit = packed_integer & 1
         return cls(signbit, exponent, fraction), bstr[size:]
 
@@ -290,9 +294,9 @@ class XdrFloat(XdrAtomic, float):
             hstr = hstr[1:]
 
         if hstr == 'inf':
-            return cls(signbit, cls._max_exponent, 0)
+            return cls(signbit, cls.max_exponent, 0)
         if hstr == 'nan':
-            return cls(signbit, cls._max_exponent, 1 << (cls._fraction_size - 1))
+            return cls(signbit, cls.max_exponent, 1 << (cls.fraction_size - 1))
 
         m = cls._hex_str_re.match(hstr)
         if not m:
@@ -318,7 +322,7 @@ class XdrFloat(XdrAtomic, float):
         string_buffer = []
         if self.signbit == 1:
             string_buffer.append('-')
-        if self.exponent == self._max_exponent:
+        if self.exponent == self.max_exponent:
             if self.fraction == 0:
                 string_buffer.append('inf')
             else:
@@ -330,34 +334,34 @@ class XdrFloat(XdrAtomic, float):
             else:
                 if self.exponent == 0:
                     string_buffer.append('0.')
-                    exponent = 1 - self._exponent_bias
+                    exponent = 1 - self.exponent_bias
                 else:
                     string_buffer.append('1.')
-                    exponent = self.exponent - self._exponent_bias
-                nr_of_pad_zeroes = (4 - self._fraction_size % 4) % 4
+                    exponent = self.exponent - self.exponent_bias
+                nr_of_pad_zeroes = (4 - self.fraction_size % 4) % 4
                 fraction = self.fraction << nr_of_pad_zeroes
-                string_buffer.append(f'{fraction:0{(self._fraction_size+3)//4}x}p')
+                string_buffer.append(f'{fraction:0{(self.fraction_size+3)//4}x}p')
                 string_buffer.append('-' if exponent < 0 else '+')
                 string_buffer.append(f'{abs(exponent):d}')
         return ''.join(string_buffer)
 
     def as_integer_ratio(self):
-        if self.exponent == self._max_exponent:
+        if self.exponent == self.max_exponent:
             if self.fraction == 0:
                 raise OverflowError('cannot convert Infinity to integer ratio')
             else:
                 raise ValueError('cannot convert NaN to integer ratio')
 
         if self.exponent == 0:
-            exponent = 1 - self._exponent_bias
+            exponent = 1 - self.exponent_bias
             numerator = self.fraction
         else:
-            exponent = self.exponent - self._exponent_bias
-            numerator = (1 << self._fraction_size) + self.fraction
+            exponent = self.exponent - self.exponent_bias
+            numerator = (1 << self.fraction_size) + self.fraction
         if numerator == 0:
             return 0, 1
 
-        denominator = (1 << self._fraction_size)
+        denominator = (1 << self.fraction_size)
         if exponent >= 0:
             numerator <<= exponent
         else:
@@ -370,10 +374,10 @@ class XdrFloat(XdrAtomic, float):
         return n % d == 0
 
     def isinf(self):
-        return self.exponent == self._max_exponent and self.fraction == 0
+        return self.exponent == self.max_exponent and self.fraction == 0
 
     def isnan(self):
-        return self.exponent == self._max_exponent and self.fraction != 0
+        return self.exponent == self.max_exponent and self.fraction != 0
 
     def __abs__(self):
         return self.__class__(0, self.exponent, self.fraction)
@@ -386,17 +390,17 @@ class XdrFloat(XdrAtomic, float):
 
     def __int__(self):
         s, e, f = self.signbit, self.exponent, self.fraction
-        if e == self._max_exponent:
+        if e == self.max_exponent:
             if f == 0:
                 raise OverflowError(f"cannot convert {self.__class__.__name__:s} infinity to integer")
             else:
                 raise ValueError(f"cannot convert {self.__class__.__name__:s} NaN to integer")
 
         if e == 0:
-            value = f >> self._exponent_bias - 1
+            value = f >> self.exponent_bias - 1
         else:
-            value = (1 << self._fraction_size) + f
-            shift = e - self._exponent_bias - self._fraction_size
+            value = (1 << self.fraction_size) + f
+            shift = e - self.exponent_bias - self.fraction_size
             if shift >= 0:
                 value <<= shift
             else:
