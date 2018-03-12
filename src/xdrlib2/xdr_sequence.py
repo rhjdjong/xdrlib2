@@ -44,11 +44,15 @@ class XdrSequence(XdrType):
 
     @classmethod
     def size(cls):
-        return cls._size
+        return cls._parameters['size']
 
     @classmethod
     def minsize(cls):
         return 0 if cls._variable else cls.size()
+
+    @classmethod
+    def type(cls):
+        return cls._parameters['type']
 
     def __iadd__(self, other):
         self[:] = self + other
@@ -90,15 +94,9 @@ class XdrSequence(XdrType):
             if not self._verify_size(len(self) - removed_size + len(value)):
                 raise ValueError(f"item replacement leads to invalid length "
                                  f"for '{self.__class__.__name__:s}' type")
-            for v in value:
-                if not self._verify_element_type(v):
-                    raise ValueError(f"invalid element type '{v.__class__.__name__:s}' "
-                                     f"for '{self.__class__.__name__:s}' type")
+            super().__setitem__(key, self._make_slice(value))
         else:
-            if not self._verify_element_type(value):
-                raise ValueError(f"invalid element type '{value.__class__.__name__:s}' "
-                                 f"for '{self.__class__.__name__:s}' type")
-        super().__setitem__(key, value)
+            super().__setitem__(key, self._make_item(value))
 
     def __delitem__(self, key):
         removed_size = len(self[key]) if isinstance(key, slice) else 1
@@ -108,16 +106,8 @@ class XdrSequence(XdrType):
         super().__delitem__(key)
 
 
-class XdrFixedSequence(XdrSequence):
-    _variable = False
-
-
-class XdrVarSequence(XdrSequence):
-    _variable = True
-
-
 class XdrOpaque(XdrSequence, bytearray):
-    _parameter_names = ('size',)
+    _parameters = {'size': None, 'type': bytes}
 
     def __new__(cls, value=None):
         if not cls._final:
@@ -132,6 +122,16 @@ class XdrOpaque(XdrSequence, bytearray):
                              f"for '{self.__class__.__name__:s}' instance")
         super().__init__(value)
 
+    def _make_item(self, value):
+        if isinstance(value, int) and 0 <= value < 256:
+            return value
+        raise ValueError(f"invalid element {value!r} for object type '{self.__class__.__name__:s}'")
+
+    def _make_slice(self, value):
+        if all(isinstance(v, int) and 0 <= v < 256 for v in value):
+            return value
+        raise ValueError(f"invalid slice {value!r} for object type '{self.__class__.__name__:s}'")
+
     def _verify_element_type(self, value):
         return isinstance(value, int) and 0 <= value < 256
 
@@ -145,11 +145,57 @@ class XdrOpaque(XdrSequence, bytearray):
         return cls(data), bstr[padded_size:]
 
 
+class XdrArray(XdrSequence, list):
+    _parameters = {'size': None, 'type': None}
+
+    def __new__(cls, value=None):
+        if not cls._final:
+            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
+        return super().__new__(cls, [cls.type()()] * cls.minsize() if value is None else value)
+
+    def __init__(self, value=None):
+        if value is None:
+            value = [self.type()()] * self.minsize()
+        else:
+            value = [self.type()(x) for x in value]
+        if not self._verify_size(len(value)):
+            raise ValueError(f"invalid sequence length '{len(value):d}' "
+                             f"for '{self.__class__.__name__:s}' instance")
+        super().__init__(value)
+
+    def _make_item(self, value):
+        return self.type()(value)
+
+    def _make_slice(self, value):
+        return (self.type()(v) for v in value)
+
+    def _verify_element_type(self, value):
+        return isinstance(value, int) and 0 <= value < 256
+
+    def encode_items(self):
+        return b''.join(x.encode() for x in self)
+
+    @classmethod
+    def parse_items(cls, bstr, size):
+        items = []
+        for _ in range(size):
+            item, bstr = cls.type().parse(bstr)
+            items.append(item)
+        return cls(items), bstr
+
+
 FixedOpaque = XdrOpaque.typedef('FixedOpaque', _variable=False)
 
 VarOpaque = XdrOpaque.typedef('VarOpaque', _variable=True)
 
 String = XdrOpaque.typedef('String', _variable=True)
+
+class FixedArray(XdrArray):
+    _variable = False
+
+
+class VarArray(XdrArray):
+    _variable = True
 
 
 

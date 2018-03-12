@@ -10,7 +10,6 @@ import itertools
 
 class Enumeration(Integer):
     _final = False
-    _parameter_names = ()
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
@@ -41,7 +40,7 @@ class Enumeration(Integer):
         if not enum_map:
             return False, kwargs
 
-        cls._name_map = enum_map
+        cls._names = enum_map
         module_ns = None
         framelist = inspect.stack()
         # framelist[0] is current frame
@@ -72,17 +71,23 @@ class Enumeration(Integer):
             return None
         return super().__new__(cls, value)
 
-    def __new__(cls, value):
-        if not cls._name_map:
+    def __new__(cls, value=None):
+        if value is None:
+            # Use the first defined enumeration value
+            for v in cls._names.values():
+                value = v
+                break
+
+        if not cls._names:
             raise NotImplementedError(f"cannot instantiate values of abstract base class")
         if isinstance(value, str):
             try:
-                return cls._name_map[value]
+                return cls._names[value]
             except KeyError:
                 raise ValueError(f"Invalid enumeration identifier name '{value:s}' "
                                  f"for enumeration '{cls.__name__:s}'") from None
         if isinstance(value, int):
-            for enum_value in cls._name_map.values():
+            for enum_value in cls._names.values():
                 if enum_value == value:
                     return enum_value
         raise ValueError(f"Invalid value {value!r} for enumeration '{cls.__name__:s}'")

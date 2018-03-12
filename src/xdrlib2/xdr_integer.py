@@ -6,7 +6,7 @@ from .xdr_core import XdrAtomic
 
 
 class XdrInteger(XdrAtomic, int):
-    _parameter_names = ('min', 'max')
+    _parameters = {'min': None, 'max': None}
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
@@ -35,11 +35,11 @@ class XdrInteger(XdrAtomic, int):
 
     @classmethod
     def max(cls):
-        return cls._max
+        return cls._parameters['max']
 
     @classmethod
     def min(cls):
-        return cls._min
+        return cls._parameters['min']
 
     @classmethod
     def signed(cls):

@@ -28,7 +28,7 @@ def test_default_instantiation(xdrtype):
     assert n == 0.0
     assert n == 0
     packed = n.encode()
-    assert len(packed) == (1 + xdrtype._exponent_size + xdrtype._fraction_size) / 8
+    assert len(packed) == (1 + xdrtype.exponent_size + xdrtype.fraction_size) / 8
     assert all(b == 0 for b in packed)
     unpacked = xdrtype.decode(packed)
     assert unpacked == n
@@ -109,7 +109,7 @@ def test_instantiation_from_bytes(xdrtype, param, value):
 def test_instantiation_from_XDR_type(xdrtype, value):
     n = xdrtype(value)
     assert isinstance(n, xdrtype)
-    if value._fraction_size > xdrtype._fraction_size:
+    if value.fraction_size > xdrtype.fraction_size:
         assert n == pytest.approx(value, precision[xdrtype])
     else:
         assert n == value
@@ -210,13 +210,13 @@ def test_encoding_for_Double(value):
 ])
 def test_maximum_value(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        max_normal_value = ctx.subtract(ctx.power(2, xdrtype._exponent_bias + 1),
-                                        ctx.power(2, xdrtype._exponent_bias - xdrtype._fraction_size))
+        max_normal_value = ctx.subtract(ctx.power(2, xdrtype.exponent_bias + 1),
+                                        ctx.power(2, xdrtype.exponent_bias - xdrtype.fraction_size))
         n = xdrtype(str(max_normal_value))
-        assert n.exponent == xdrtype._max_exponent - 1
-        assert n.fraction == xdrtype._fraction_mask
+        assert n.exponent == xdrtype.max_exponent - 1
+        assert n.fraction == xdrtype.fraction_mask
         assert xdrtype.decode(n.encode()) == n
 
 
@@ -227,13 +227,13 @@ def test_maximum_value(xdrtype):
 ])
 def test_subnormal(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        for i in range(xdrtype._fraction_size):
-            value = ctx.power(2, - xdrtype._exponent_bias - i)
+        for i in range(xdrtype.fraction_size):
+            value = ctx.power(2, - xdrtype.exponent_bias - i)
             n = xdrtype(str(value))
-            fraction = 1 << (xdrtype._fraction_size - i - 1)
-            packed = fraction.to_bytes(xdrtype._packed_size, 'big')
+            fraction = 1 << (xdrtype.fraction_size - i - 1)
+            packed = fraction.to_bytes(xdrtype.packed_size(), 'big')
             assert n.encode() == packed
             unpacked = xdrtype.decode(packed)
             assert n == unpacked
@@ -247,9 +247,9 @@ def test_subnormal(xdrtype):
 ])
 def test_smallest_normal_number(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        smallest_normal = ctx.power(2, 1 - xdrtype._exponent_bias)
+        smallest_normal = ctx.power(2, 1 - xdrtype.exponent_bias)
         n = xdrtype(str(smallest_normal))
         assert n.exponent == 1
         assert n.fraction == 0
@@ -263,13 +263,13 @@ def test_smallest_normal_number(xdrtype):
 ])
 def test_largest_subnormal_number(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        power_of_two = ctx.power(2, 1 - xdrtype._exponent_bias - xdrtype._fraction_size)
-        largest_subnormal = ctx.multiply(xdrtype._fraction_mask, power_of_two)
+        power_of_two = ctx.power(2, 1 - xdrtype.exponent_bias - xdrtype.fraction_size)
+        largest_subnormal = ctx.multiply(xdrtype.fraction_mask, power_of_two)
         n = xdrtype(str(largest_subnormal))
         assert n.exponent == 0
-        assert n.fraction == xdrtype._fraction_mask
+        assert n.fraction == xdrtype.fraction_mask
         assert xdrtype.decode(n.encode()) == n
 
 
@@ -280,9 +280,9 @@ def test_largest_subnormal_number(xdrtype):
 ])
 def test_smallest_subnormal_numbers(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        exponent = 1 - xdrtype.exponent_bias - xdrtype.fraction_size
         value = ctx.power(2, exponent)
         n = xdrtype(str(value))
         assert n.exponent == 0
@@ -297,9 +297,9 @@ def test_smallest_subnormal_numbers(xdrtype):
 ])
 def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
     with localcontext() as ctx:
-        ctx.prec = xdrtype._fraction_size + 3
+        ctx.prec = xdrtype.fraction_size + 3
         ctx.rounding = ROUND_HALF_EVEN
-        exponent = 1 - xdrtype._exponent_bias - xdrtype._fraction_size
+        exponent = 1 - xdrtype.exponent_bias - xdrtype.fraction_size
         smallest_subnormal = ctx.power(2, exponent)
         n = xdrtype(str(smallest_subnormal))
         assert n.exponent == 0
@@ -502,6 +502,6 @@ def test_float_types_cannot_be_modified(xdrtype):
     with pytest.raises(AttributeError):
         xdrtype.new_attribute = 1
     with pytest.raises(AttributeError):
-        xdrtype._fraction_size = 3
+        xdrtype.fraction_size = 3
     with pytest.raises(AttributeError):
-        del xdrtype._exponent_bias
+        del xdrtype.exponent_bias

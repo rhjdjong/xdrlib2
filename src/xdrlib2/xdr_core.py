@@ -2,6 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
+import inspect
 
 class _MetaXdrType(type):
     # Concrete XDR types contain parameters that determine the
@@ -19,41 +20,48 @@ class _MetaXdrType(type):
         super().__delattr__(name)
 
     def __getattr__(cls, name):
-        if not name.startswith('_') and name in cls._name_map:
-            return cls._name_map[name]
-        return super().__getattr__(name)
+        if name in cls._names:
+            return cls._names[name]
+        raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s} "
+                             f"has no attribute '{name:s}'")
 
 
 class XdrType(metaclass=_MetaXdrType):
     _final = False
-    _name_map = {}
+    _parameters = {}
+    _names = {}
 
     def __init_subclass__(cls, **kwargs):
-        if hasattr(cls, '_parameter_names'):
-            modified = False
+        if cls._parameters or kwargs:
+            modified = None
 
+            parameters = cls._parameters.copy()
             # Check for parameters defined in the body of this class
-            for name in cls._parameter_names:
-                if name in vars(cls) and not callable(getattr(cls, name)):
-                    setattr(cls, '_' + name, vars(cls)[name])
-                    delattr(cls, name)
+            for param in list(parameters.keys()):
+                if param in vars(cls):
+                    if not inspect.ismethod(getattr(cls, param)):
+                        parameters[param] = vars(cls)[param]
+                        delattr(cls, param)
                     modified = True
 
             # Parameters in kwargs override parameters in the (super)class body
-            for name in cls._parameter_names:
+            for param in list(parameters.keys()):
                 try:
-                    kw_value = kwargs.pop(name)
+                    kw_value = kwargs.pop(param)
                 except KeyError:
                     pass
                 else:
-                    setattr(cls, '_' + name, kw_value)
+                    parameters[param] = kw_value
                     modified = True
 
-            if cls._final and modified:
-                raise TypeError(f"final class '{cls.__name__:s}' "
+            if modified:
+                if cls._final:
+                    raise TypeError(f"final class '{cls.__name__:s}' "
                                 f"cannot be subclassed with modifications")
+                else:
+                    cls._parameters = parameters
 
-            if not cls._final and all(vars(cls).get('_' + name) is not None for name in cls._parameter_names):
+            if not cls._final and all(v is not None for v in parameters.values()):
                 cls._final, kwargs = cls._init_concrete_subclass(**kwargs)
 
         super().__init_subclass__(**kwargs)
