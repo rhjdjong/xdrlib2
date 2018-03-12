@@ -11,14 +11,14 @@ import itertools
 class Enumeration(Integer):
     _final = False
     _parameter_names = ()
-    _enum_map = {}
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
         enum_list = []
-        for key, value in vars(cls).items():
+        for key, value in list(vars(cls).items()):
             enum_value = cls._make_enum_value(key, value)
             if enum_value is not None:
+                delattr(cls, key)
                 enum_list.append((key, enum_value))
         for key, value in list(kwargs.items()):
             enum_value = cls._make_enum_value(key, value)
@@ -41,7 +41,7 @@ class Enumeration(Integer):
         if not enum_map:
             return False, kwargs
 
-        cls._enum_map = enum_map
+        cls._name_map = enum_map
         module_ns = None
         framelist = inspect.stack()
         # framelist[0] is current frame
@@ -58,7 +58,7 @@ class Enumeration(Integer):
         module_ns = frame_info.frame.f_globals
 
         for name, value in enum_map.items():
-            setattr(cls, name, value)
+            # setattr(cls, name, value)
             if module_ns:
                 if name in module_ns:
                     raise ValueError(f"duplicate enum identifier name '{name:s}' "
@@ -73,16 +73,16 @@ class Enumeration(Integer):
         return super().__new__(cls, value)
 
     def __new__(cls, value):
-        if not cls._enum_map:
+        if not cls._name_map:
             raise NotImplementedError(f"cannot instantiate values of abstract base class")
         if isinstance(value, str):
             try:
-                return cls._enum_map[value]
+                return cls._name_map[value]
             except KeyError:
                 raise ValueError(f"Invalid enumeration identifier name '{value:s}' "
                                  f"for enumeration '{cls.__name__:s}'") from None
         if isinstance(value, int):
-            for enum_value in cls._enum_map.values():
+            for enum_value in cls._name_map.values():
                 if enum_value == value:
                     return enum_value
         raise ValueError(f"Invalid value {value!r} for enumeration '{cls.__name__:s}'")

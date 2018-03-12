@@ -19,6 +19,7 @@ class Animals(xdrlib.Enumeration):
     DOG = 2
     HORSE = 5
 
+EXISTING_VALUE = 3
 
 def test_enumeration_with_subclass_arguments():
     assert issubclass(Colors, xdrlib.Enumeration)
@@ -98,6 +99,19 @@ def test_cannot_modify_enumeration_identifiers():
 def test_cannot_delete_enumeration_identifiers():
     with pytest.raises(AttributeError):
         del Colors.BLUE
+
+
+def test_cannot_create_enumeration_that_overrides_module_attribute():
+    with pytest.raises(ValueError):
+        xdrlib.Enumeration.typedef('InvalidEnum', OK_NAME=1, EXISTING_VALUE=2)
+
+
+def test_can_create_enumeration_with_python_keywords():
+    weird_enum = xdrlib.Enumeration.typedef('Weird', **{'id': 1, 'if': 2, 'while': 3})
+    assert weird_enum.id == 1
+    assert weird_enum('if') == 2
+    assert getattr(current_module, 'while') == 3
+    assert 'while' in globals()
 
 
 def test_packing_of_enumerations():

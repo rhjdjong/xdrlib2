@@ -18,9 +18,15 @@ class _MetaXdrType(type):
             raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
         super().__delattr__(name)
 
+    def __getattr__(cls, name):
+        if not name.startswith('_') and name in cls._name_map:
+            return cls._name_map[name]
+        return super().__getattr__(name)
+
 
 class XdrType(metaclass=_MetaXdrType):
     _final = False
+    _name_map = {}
 
     def __init_subclass__(cls, **kwargs):
         if hasattr(cls, '_parameter_names'):
