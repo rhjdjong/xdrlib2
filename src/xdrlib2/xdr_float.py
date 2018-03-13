@@ -11,15 +11,7 @@ import operator
 
 
 class XdrFloat(XdrAtomic, float):
-    _parameters = {'exponent_size': None, 'fraction_size': None}
-
     _final = False
-
-    fraction_size = None
-    fraction_mask = None
-    exponent_size = None
-    max_exponent = None
-    exponent_bias = None
 
     _packed_size = None
     _spec_re = re.compile(r'^[+-]?(?:(?P<inf>inf(?:inity)?)|(?P<nan>nan)(?P<payload>\d*))$')
@@ -27,36 +19,48 @@ class XdrFloat(XdrAtomic, float):
     _nstr_exponentfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)(?:\.(?P<decpart>\d*))[Ee](?P<exp>[+-]?\d+)$')
     _hex_str_re = re.compile(r'^(?:0x)?(?P<intpart>[0-9a-f]+)(?:\.(?P<fraction>[0-9a-f]+))?(?:p(?P<exp>[+-]?\d+))?$')
 
-    @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        cls.exponent_size = cls._parameters['exponent_size']
-        cls.fraction_size = cls._parameters['fraction_size']
-        # if exponent_size == 0 and hasattr(cls, 'exponent_size'):
-        #     exponent_size = cls.exponent_size
-        #     del cls.exponent_size
-        # if fraction_size == 0 and hasattr(cls, 'fraction_size'):
-        #     fraction_size = cls.fraction_size
-        #     del cls.fraction_size
-        if cls.exponent_size < 1:
-            raise ValueError(f'Float subclass requires exponent_size >= 1, got {cls.exponent_size:d}')
-        if cls.fraction_size < 1:
-            raise ValueError(f'Float subclass requires fraction_size >= 1, got {cls.fraction_size:d}')
+    def __init_subclass__(cls, exponent_size=None, fraction_size=None):
+        parameters = cls._get_names_from_class_body('exponent_size', 'fraction_size')
+        if exponent_size is not None:
+            parameters['exponent_size'] = exponent_size
+        if fraction_size is not None:
+            parameters['fraction_size'] = fraction_size
+        if cls._final:
+            if parameters:
+                # This is subclassing a concrete type with additional or modified parameters
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
+            return
 
-        bit_size = 1 + cls.exponent_size + cls.fraction_size
-        packed_size = bit_size // 8
-        if bit_size != 8 * packed_size:
-            raise ValueError(f'Sign bit, exponent size {cls.exponent_size:d} and fraction size {cls.fraction_size:d} '
-                             f'together are not a multiple of 8 bits')
-        cls._packed_size = packed_size
+        if parameters:
+            if not all(v is not None for v in parameters.values()):
+                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
+            exponent_size = parameters['exponent_size']
+            fraction_size = parameters['fraction_size']
 
-        cls._signbit_class = type('Signbit', (XdrInteger,), {}, min=0, max=2)
-        cls._exponent_class = type('Exponent', (XdrInteger,), {}, min=0, max=1 << cls.exponent_size)
-        cls._fraction_class = type('Fraction', (XdrInteger,), {}, min=0, max=1 << cls.fraction_size)
+            if exponent_size < 1:
+                raise ValueError(f'Float subclass requires exponent_size >= 1, got {exponent_size:d}')
+            if fraction_size < 1:
+                raise ValueError(f'Float subclass requires fraction_size >= 1, got {fraction_size:d}')
 
-        cls.fraction_mask = (1 << cls.fraction_size) - 1
-        cls.max_exponent = (1 << cls.exponent_size) - 1
-        cls.exponent_bias = cls.max_exponent >> 1
-        return True, kwargs
+            bit_size = 1 + exponent_size + fraction_size
+            packed_size = bit_size // 8
+            if bit_size != 8 * packed_size:
+                raise ValueError(f'Sign bit, exponent size {cls.exponent_size:d} and fraction size {cls.fraction_size:d} '
+                                 f'together are not a multiple of 8 bits')
+            cls._packed_size = packed_size
+
+            cls._signbit_class = type('Signbit', (XdrInteger,), {}, min=0, max=2)
+            cls._exponent_class = type('Exponent', (XdrInteger,), {}, min=0, max=1 << exponent_size)
+            cls._fraction_class = type('Fraction', (XdrInteger,), {}, min=0, max=1 << fraction_size)
+
+            parameters['fraction_mask'] = (1 << fraction_size) - 1
+            parameters['max_exponent'] = (1 << exponent_size) - 1
+            parameters['exponent_bias'] = parameters['max_exponent'] >> 1
+
+            for name, value in parameters.items():
+                setattr(cls, name, value)
+
+            cls._final = True
 
     def __new__(cls, *args):
         if len(args) == 3:

@@ -7,6 +7,7 @@ from .xdr_integer import Integer, UnsignedInteger, Hyper, UnsignedHyper
 from .xdr_enumeration import Enumeration
 from .xdr_float import Float, Double, Quadruple
 from .xdr_sequence import FixedOpaque, VarOpaque, String, FixedArray, VarArray
+from .xdr_struct import Struct
 
 class Boolean(Enumeration):
     FALSE = 0
@@ -38,4 +39,5 @@ __all__ = [
     'String',
     'FixedArray',
     'VarArray',
+    'Struct',
 ]

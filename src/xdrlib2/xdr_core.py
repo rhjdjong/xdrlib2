@@ -22,7 +22,7 @@ class _MetaXdrType(type):
     def __getattr__(cls, name):
         if name in cls._names:
             return cls._names[name]
-        raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s} "
+        raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
                              f"has no attribute '{name:s}'")
 
 
@@ -30,6 +30,26 @@ class XdrType(metaclass=_MetaXdrType):
     _final = False
     _parameters = {}
     _names = {}
+
+    @classmethod
+    def _get_names_from_class_body(cls, *args):
+        parameters = {}
+        class_body = vars(cls)
+        for name, value in class_body.items():
+            if not name.startswith('_'):
+                if name in parameters:
+                    raise ValueError(f"duplicate name '{name:s}' in class '{cls.__name__:s}'")
+                parameters[name] = value
+
+        if args:
+            unexpected_parameters = set(parameters.keys()) - set(args)
+            if unexpected_parameters:
+                raise ValueError(f"unexpected parameter(s) for '{cls.__name__:s}': "
+                                f"{tuple(unexpected_parameters)!s} ")
+        for name in parameters:
+            delattr(cls, name)
+        return parameters
+
 
     def __init_subclass__(cls, **kwargs):
         if cls._parameters or kwargs:
@@ -84,7 +104,7 @@ class XdrType(metaclass=_MetaXdrType):
 
     @staticmethod
     def padded_size(size):
-        return size + ((size % 4) % 4)
+        return size + ((4 - size % 4) % 4)
 
     @staticmethod
     def remove_padding(bstr, size):
