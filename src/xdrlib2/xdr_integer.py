@@ -61,16 +61,16 @@ class XdrInteger(XdrAtomic, int):
 
 
 Int32 = XdrInteger.typedef('Int32', min=-1<<31, max=1<<31)
-Integer = Int32
+Integer = Int32.typedef('Integer')
 
 
 Int32u = XdrInteger.typedef('Int32u', min=0, max=1<<32)
-UnsignedInteger = Int32u
+UnsignedInteger = Int32u.typedef('UnsignedInteger')
 
 
 Int64 = XdrInteger.typedef('Int64', min=-1<<63, max=1<<63)
-Hyper = Int64
+Hyper = Int64.typedef('Hyper')
 
 
 Int64u = XdrInteger.typedef('Int64u', min=0, max=1<<64)
-UnsignedHyper = Int64u
+UnsignedHyper = Int64u.typedef('UnsignedHyper')

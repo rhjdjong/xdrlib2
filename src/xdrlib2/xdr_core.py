@@ -113,9 +113,9 @@ class XdrType(metaclass=_MetaXdrType):
         return bstr[:size]
 
     @classmethod
-    def typedef(cls, name=None, **kwargs):
+    def typedef(cls, name=None, *bases, **kwargs):
         type_name = name if name else '_'
-        new_type = type(type_name, (cls,), kwargs)
+        new_type = cls.__class__(type_name, (cls,) + bases, kwargs)
         return new_type
 
 
