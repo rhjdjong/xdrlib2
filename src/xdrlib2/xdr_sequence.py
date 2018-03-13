@@ -107,7 +107,22 @@ class XdrSequence(XdrType):
 
 
 class XdrOpaque(XdrSequence, bytearray):
-    _parameters = {'size': None, 'type': bytes}
+
+    def __init_subclass__(cls, size=None):
+        parameters = cls._get_names_from_class_body('size')
+        if size is not None:
+            parameters['size'] = size
+        if cls._final:
+            if parameters:
+                # This is subclassing a concrete enum type with additional items
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' with modifications")
+            return
+
+        if parameters:
+            if not all(v is not None for v in parameters.values()):
+                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
+            cls._parameters = parameters
+            cls._final = True
 
     def __new__(cls, value=None):
         if not cls._final:
@@ -146,7 +161,24 @@ class XdrOpaque(XdrSequence, bytearray):
 
 
 class XdrArray(XdrSequence, list):
-    _parameters = {'size': None, 'type': None}
+
+    def __init_subclass__(cls, size=None, type=None):
+        parameters = cls._get_names_from_class_body('size', 'type')
+        if size is not None:
+            parameters['size'] = size
+        if type is not None:
+            parameters['type'] = type
+        if cls._final:
+            if parameters:
+                # This is subclassing a concrete enum type with additional items
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' with modifications")
+            return
+
+        if parameters:
+            if not all(v is not None for v in parameters.values()):
+                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
+            cls._parameters = parameters
+            cls._final = True
 
     def __new__(cls, value=None):
         if not cls._final:

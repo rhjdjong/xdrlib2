@@ -11,49 +11,40 @@ import itertools
 class Enumeration(Integer):
     _final = False
 
-    @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs):
         enum_list = []
-        for key, value in list(vars(cls).items()):
-            enum_value = cls._make_enum_value(key, value)
-            if enum_value is not None:
-                delattr(cls, key)
-                enum_list.append((key, enum_value))
-        for key, value in list(kwargs.items()):
-            enum_value = cls._make_enum_value(key, value)
-            if enum_value is not None:
-                del kwargs[key]
-                enum_list.append((key, enum_value))
-
+        for n, v in cls._get_names_from_class_body().items():
+            enum_list.append((n, cls._make_enum_value(n, v)))
+        for n, v in kwargs.items():
+            enum_list.append((n, cls._make_enum_value(n, v)))
         enum_map = {}
         for name, value in enum_list:
             if name in enum_map:
-                raise ValueError(f"duplicate enum identifier name '{name:s}' "
+                raise TypeError(f"duplicate enum identifier name '{name:s}' "
                                  f"in class '{cls.__name__:s}'")
             else:
                 enum_map[name] = value
 
-        if cls._final and enum_map:
-            # This is subclassing a concrete enum type with additional items
-            raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type with modifications")
+        if cls._final:
+            if enum_map:
+                # This is subclassing a concrete enum type with additional items
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' enumeration type with modifications")
+            return
 
         if not enum_map:
-            return False, kwargs
+            raise TypeError(f"Enumeration subclass '{cls.__name__:s}' requires definition of enumeration values")
 
         cls._names = enum_map
         module_ns = None
         framelist = inspect.stack()
         # framelist[0] is current frame
-        # framelist[1] is the calling frame, i.e. the __init_subclass__ method called
-        # for this subclass definition,
-        # framelist[2] is the subclass definition itself
+        # framelist[1] is the calling frame for this subclass definition,
         # unless it is the 'typedef' classmethod. In that case
         # the module must be derived from the next calling frame
-        if framelist[1].function == '__init_subclass__':
-            if framelist[2].function == 'typedef':
-                frame_info = framelist[3]
-            else:
-                frame_info = framelist[2]
+        if framelist[1].function == 'typedef':
+            frame_info = framelist[2]
+        else:
+            frame_info = framelist[1]
         module_ns = frame_info.frame.f_globals
 
         for name, value in enum_map.items():
@@ -63,13 +54,17 @@ class Enumeration(Integer):
                     raise ValueError(f"duplicate enum identifier name '{name:s}' "
                                      f"in module '{module_ns['__name__']:s}'")
                 module_ns[name] = value
-        return True, kwargs
+
+        cls._final = True
 
     @classmethod
     def _make_enum_value(cls, name, value):
         if not re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name):
-            return None
-        return super().__new__(cls, value)
+            raise TypeError(f"invalid enumeration identifier name '{name:s}' for class '{cls.__name__:s}'")
+        try:
+            return super().__new__(cls, value)
+        except ValueError:
+            raise TypeError(f"invalid enumeration value {value!s} for '{cls.__name__:s}.{n:s}'")
 
     def __new__(cls, value=None):
         if value is None:

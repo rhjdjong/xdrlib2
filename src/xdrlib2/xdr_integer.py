@@ -8,11 +8,25 @@ from .xdr_core import XdrAtomic
 class XdrInteger(XdrAtomic, int):
     _parameters = {'min': None, 'max': None}
 
-    @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        size = (cls.max() - cls.min()).bit_length() - 1
-        cls._packed_size = size // 8 + (1 if size % 8 else 0)
-        return True, kwargs
+    def __init_subclass__(cls, min=None, max=None):
+        parameters = cls._get_names_from_class_body('min', 'max')
+        if min is not None:
+            parameters['min'] = min
+        if max is not None:
+            parameters['max'] = max
+        if cls._final:
+            if parameters:
+                # This is subclassing a concrete type with additional or modified parameters
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
+            return
+
+        if parameters:
+            if not all(v is not None for v in parameters.values()):
+                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
+            cls._parameters = parameters
+            size = (cls.max() - cls.min()).bit_length() - 1
+            cls._packed_size = size // 8 + (1 if size % 8 else 0)
+            cls._final = True
 
     def __new__(cls, value=0):
         v = super().__new__(cls, value)
