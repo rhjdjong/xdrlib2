@@ -104,7 +104,7 @@ class XdrType(metaclass=_MetaXdrType):
 
     @staticmethod
     def padded_size(size):
-        return size + ((size % 4) % 4)
+        return size + ((4 - size % 4) % 4)
 
     @staticmethod
     def remove_padding(bstr, size):
