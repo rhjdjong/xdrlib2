@@ -125,3 +125,22 @@ class XdrAtomic(XdrType):
     @classmethod
     def packed_size(cls):
         return cls._packed_size
+
+
+class Void(XdrType):
+    def __new__(cls, _=None):
+        return super().__new__(cls)
+
+    def encode(self):
+        return b''
+
+    @classmethod
+    def parse(cls, bstr):
+        return cls(), bstr
+
+    def __eq__(self, other):
+        return other is None or isinstance(other, Void)
+
+    def __ne__(self, other):
+        return not self == other
+

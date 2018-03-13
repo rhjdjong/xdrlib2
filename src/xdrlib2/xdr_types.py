@@ -2,7 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-
+from .xdr_core import Void
 from .xdr_integer import Integer, UnsignedInteger, Hyper, UnsignedHyper
 from .xdr_enumeration import Enumeration
 from .xdr_float import Float, Double, Quadruple
@@ -23,6 +23,7 @@ TRUE = Boolean.TRUE
 
 
 __all__ = [
+    'Void',
     'Integer',
     'UnsignedInteger',
     'Hyper',
