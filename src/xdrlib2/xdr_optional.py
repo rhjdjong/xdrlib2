@@ -81,8 +81,10 @@ class Optional(XdrType):
         # creates and returns a new, optional XDR class.
         # In all other cases it is the instantiation of an already
         # existing optional class.
-
-        if cls._is_called_to_create_a_new_optional_class(*args, **kwargs):
+        if not cls._final:
+            # class is called to wrap an existing class.
+            if kwargs or len(args) != 1 or not inspect.isclass(args[0]) or not issubclass(args[0], XdrType):
+                raise TypeError(f"cannot apply Optional class wrapper to {args!s}, {kwargs!s}")
             optional_class = cls._make_optional_class(args[0])
             return optional_class
 
@@ -106,18 +108,6 @@ class Optional(XdrType):
         else:
             obj = cls._absent_class()
         return obj, source
-
-    @classmethod
-    def _is_called_to_create_a_new_optional_class(cls, *args, **kwargs):
-        # Derived classes cannot be used to create new optional classes
-        if cls is not Optional: return False
-
-        # To create a new optional class, Optional must be called
-        # with a single argument that is an XDR type.
-        if kwargs: return False
-        if len(args) != 1: return False
-        if not inspect.isclass(args[0]): return False
-        return issubclass(args[0], XdrType)
 
     @staticmethod
     def _is_instantiated_as_absent(*args, **kwargs):

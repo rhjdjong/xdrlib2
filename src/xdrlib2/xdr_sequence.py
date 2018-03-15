@@ -44,7 +44,7 @@ class XdrSequence(XdrType):
 
     @classmethod
     def size(cls):
-        return cls._parameters['size']
+        return cls._size
 
     @classmethod
     def minsize(cls):
@@ -105,6 +105,12 @@ class XdrSequence(XdrType):
                              f"for '{self.__class__.__name__:s}' type")
         super().__delitem__(key)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__:s}(({', '.join(str(v) for v in self):s}))"
+
+    # def __str__(self):
+    #     return super().__str__()
+
 
 class XdrOpaque(XdrSequence, bytearray):
 
@@ -121,7 +127,7 @@ class XdrOpaque(XdrSequence, bytearray):
         if parameters:
             if not all(v is not None for v in parameters.values()):
                 raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
-            cls._parameters = parameters
+            cls._size = parameters['size']
             cls._final = True
 
     def __new__(cls, value=None):
@@ -146,9 +152,6 @@ class XdrOpaque(XdrSequence, bytearray):
         if all(isinstance(v, int) and 0 <= v < 256 for v in value):
             return value
         raise ValueError(f"invalid slice {value!r} for object type '{self.__class__.__name__:s}'")
-
-    def _verify_element_type(self, value):
-        return isinstance(value, int) and 0 <= value < 256
 
     def encode_items(self):
         return self + self.padding(len(self))
@@ -177,32 +180,34 @@ class XdrArray(XdrSequence, list):
         if parameters:
             if not all(v is not None for v in parameters.values()):
                 raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
-            cls._parameters = parameters
+            cls._size = parameters['size']
+            cls._type = parameters['type']
             cls._final = True
 
     def __new__(cls, value=None):
         if not cls._final:
             raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-        return super().__new__(cls, [cls.type()()] * cls.minsize() if value is None else value)
+        return super().__new__(cls, [cls._type()] * cls.minsize() if value is None else value)
 
     def __init__(self, value=None):
         if value is None:
-            value = [self.type()()] * self.minsize()
+            value = [self._type()] * self.minsize()
         else:
-            value = [self.type()(x) for x in value]
+            value = [self._type(x) for x in value]
         if not self._verify_size(len(value)):
             raise ValueError(f"invalid sequence length '{len(value):d}' "
                              f"for '{self.__class__.__name__:s}' instance")
         super().__init__(value)
 
+    @classmethod
+    def type(cls):
+        return cls._type
+
     def _make_item(self, value):
-        return self.type()(value)
+        return self._type(value)
 
     def _make_slice(self, value):
-        return (self.type()(v) for v in value)
-
-    def _verify_element_type(self, value):
-        return isinstance(value, int) and 0 <= value < 256
+        return (self._type(v) for v in value)
 
     def encode_items(self):
         return b''.join(x.encode() for x in self)
@@ -211,7 +216,7 @@ class XdrArray(XdrSequence, list):
     def parse_items(cls, bstr, size):
         items = []
         for _ in range(size):
-            item, bstr = cls.type().parse(bstr)
+            item, bstr = cls._type.parse(bstr)
             items.append(item)
         return cls(items), bstr
 

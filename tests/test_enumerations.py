@@ -128,3 +128,10 @@ def test_unpacking_of_enumerations():
 def test_unpacking_invalid_value_fails():
     with pytest.raises(ValueError):
         Colors.decode(b'\0\0\0\x04')
+
+
+def test_boolean():
+    assert xdrlib.TRUE == True
+    assert xdrlib.FALSE == False
+    assert xdrlib.Boolean(True) == xdrlib.TRUE
+    assert xdrlib.Boolean(False) == xdrlib.FALSE

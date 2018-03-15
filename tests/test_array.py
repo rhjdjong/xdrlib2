@@ -56,12 +56,8 @@ def test_var_length_array_through_argument():
     assert n.encode() == p
 
 
-@pytest.mark.parametrize('xdrtype', [
-    MyVarArray,
-    MyEnumVarArray
-])
-def test_default_instantiation_variable_is_empty_bytes(xdrtype):
-    x = xdrtype()
+def test_default_instantiation_variable_is_empty_bytes():
+    x = MyVarArray()
     assert x == []
     assert x.encode() == b'\0\0\0\0'
 

@@ -86,3 +86,9 @@ class Struct(XdrType):
 
     def __ne__(self, other):
         return not self == other
+
+    def __repr__(self):
+        return f"{self.__class__.__name__:s}({', '.join(str(v) for v in self._values.values()):s})"
+
+    def __str__(self):
+        return ', '.join(str(v) for v in self._values.values())

@@ -19,17 +19,26 @@ class _MetaXdrType(type):
             raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
         super().__delattr__(name)
 
-    def __getattr__(cls, name):
-        if name in cls._names:
-            return cls._names[name]
-        raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
-                             f"has no attribute '{name:s}'")
+    # def __getattr__(cls, name):
+    #     return cls._getattr(name)
+    #     # if name in cls._names:
+    #     #     return cls._names[name]
+    #     # raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
+    #     #                      f"has no attribute '{name:s}'")
+
+    def __getitem__(cls, index):
+        return cls._get_item(index)
 
 
 class XdrType(metaclass=_MetaXdrType):
     _final = False
+    _abstract = True
     _parameters = {}
     _names = {}
+
+    @classmethod
+    def _get_item(cls, index):
+        raise NotImplementedError(f"class '{cls.__name__:s}' does not support indexing.")
 
     @classmethod
     def _get_names_from_class_body(cls, *args):
@@ -51,40 +60,6 @@ class XdrType(metaclass=_MetaXdrType):
         return parameters
 
 
-    def __init_subclass__(cls, **kwargs):
-        if cls._parameters or kwargs:
-            modified = None
-
-            parameters = cls._parameters.copy()
-            # Check for parameters defined in the body of this class
-            for param in list(parameters.keys()):
-                if param in vars(cls):
-                    if not inspect.ismethod(getattr(cls, param)):
-                        parameters[param] = vars(cls)[param]
-                        delattr(cls, param)
-                    modified = True
-
-            # Parameters in kwargs override parameters in the (super)class body
-            for param in list(parameters.keys()):
-                try:
-                    kw_value = kwargs.pop(param)
-                except KeyError:
-                    pass
-                else:
-                    parameters[param] = kw_value
-                    modified = True
-
-            if modified:
-                if cls._final:
-                    raise TypeError(f"final class '{cls.__name__:s}' "
-                                f"cannot be subclassed with modifications")
-                else:
-                    cls._parameters = parameters
-
-            if not cls._final and all(v is not None for v in parameters.values()):
-                cls._final, kwargs = cls._init_concrete_subclass(**kwargs)
-
-        super().__init_subclass__(**kwargs)
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
@@ -115,7 +90,10 @@ class XdrType(metaclass=_MetaXdrType):
     @classmethod
     def typedef(cls, name=None, *bases, **kwargs):
         type_name = name if name else '_'
-        new_type = cls.__class__(type_name, (cls,) + bases, kwargs)
+        class_dict = {k: v for k, v in kwargs.items() if k not in cls._parameters}
+        for k in class_dict:
+            del kwargs[k]
+        new_type = cls.__class__(type_name, (cls,) + bases, class_dict, **kwargs)
         return new_type
 
 
@@ -128,6 +106,9 @@ class XdrAtomic(XdrType):
 
 
 class Void(XdrType):
+    _final = True
+    _abstract = False
+
     def __new__(cls, _=None):
         return super().__new__(cls)
 
@@ -144,3 +125,8 @@ class Void(XdrType):
     def __ne__(self, other):
         return not self == other
 
+    def __repr__(self):
+        return f"{self.__class__.__name__:s}()"
+
+    def __str__(self):
+        return 'None'

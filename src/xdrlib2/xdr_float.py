@@ -60,9 +60,12 @@ class XdrFloat(XdrAtomic, float):
             for name, value in parameters.items():
                 setattr(cls, name, value)
 
+            cls._abstract = False
             cls._final = True
 
     def __new__(cls, *args):
+        if cls._abstract:
+            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
         if len(args) == 3:
             signbit, exponent, fraction = args
         elif len(args) <= 1:
@@ -382,6 +385,12 @@ class XdrFloat(XdrAtomic, float):
 
     def isnan(self):
         return self.exponent == self.max_exponent and self.fraction != 0
+
+    def __repr__(self):
+        return f"{self.__class__.__name__:s}({super().__repr__():s})"
+
+    def __str__(self):
+        return super().__str__()
 
     def __abs__(self):
         return self.__class__(0, self.exponent, self.fraction)
