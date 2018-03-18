@@ -8,7 +8,7 @@ import xdrlib2 as xdrlib
 
 UnionWithDefault = xdrlib.Union.typedef('UnionWithDefault', kind=xdrlib.Integer)
 UnionWithDefault.case(1, number=xdrlib.Integer)
-UnionWithDefault.case(2, 3, text=xdrlib.String)
+UnionWithDefault.case(2, 3, text=xdrlib.String(size=10))
 UnionWithDefault.case(4, flag=xdrlib.Boolean)
 UnionWithDefault.default(xdrlib.Void)
 
@@ -27,6 +27,8 @@ SimpleUnionFromEnum.case(1, xdrlib.Void)
 SimpleUnionFromEnum.case(2, number=xdrlib.Integer)
 SimpleUnionFromEnum.case(3, logic=xdrlib.Boolean)
 SimpleUnionFromEnum.default()
+
+UnfinishedUnion = xdrlib.Union(kind=xdrlib.Integer)
 
 
 def test_example():
@@ -55,6 +57,25 @@ def test_invalid_switch_type():
     with pytest.raises(ValueError):
         casetype = UnionWithDefault['hallo']
 
+
+@pytest.mark.parametrize('type', [
+    xdrlib.String,
+    xdrlib.Enumeration,
+    xdrlib.VarArray,
+    xdrlib.Union(discr=xdrlib.Integer)
+])
+def test_union_creation_with_non_final_arm_type_fails(type):
+    with pytest.raises(TypeError):
+        UnfinishedUnion.case(1, arm=type)
+
+
+def test_union_creation_with_non_optional_recursion_fails():
+    with pytest.raises(TypeError):
+        UnfinishedUnion.case(1, arm=UnfinishedUnion)
+
+
+# def test_union_creation_with_optional_recursion_works():
+#     UnfinishedUnion.case(1, arm=xdrlib.Optional(UnfinishedUnion))
 
 def test_simple_union_invalid_initialization():
     with pytest.raises(ValueError):
@@ -161,6 +182,64 @@ def test_simple_union_default():
     assert bp == xdrlib.Integer(255).encode() + b'dumb'
     nu = SimpleUnion.decode(bp)
     assert nu == u
+
+
+@pytest.mark.parametrize('case,name,arm_type', [
+    (1, 'number', xdrlib.Integer),
+    (2, 'text', xdrlib.String),
+    (3, 'text', xdrlib.String),
+    (4, 'flag', xdrlib.Boolean)
+])
+def test_union_introspection(case, name, arm_type):
+    arm_name, arm_class = UnionWithDefault.case(case)
+    assert arm_name == name
+    assert issubclass(arm_class, arm_type)
+
+
+def test_union_default_arm_introspection():
+    name, type = UnionWithDefault.default()
+    assert name is None
+    assert issubclass(type, xdrlib.Void)
+    name, type = SimpleUnion.default()
+    assert name == 'whatever'
+    assert issubclass(type, xdrlib.FixedOpaque)
+    with pytest.raises(ValueError):
+        SimpleUnionFromEnum.default()
+
+
+def test_union_case_introspection_fails_for_invalid_case_value():
+    with pytest.raises(ValueError):
+        UnionWithDefault.case(10)
+
+
+def test_union_instantiation_through_arm_name():
+    a = UnionWithDefault.number(123)
+    b = UnionWithDefault.text(b'hallo')
+    c = UnionWithDefault.flag(True)
+    assert isinstance(a, UnionWithDefault)
+    assert isinstance(a, xdrlib.Integer)
+    assert isinstance(b, UnionWithDefault)
+    assert isinstance(b, xdrlib.String)
+    assert isinstance(c, UnionWithDefault)
+    assert isinstance(c, xdrlib.Boolean)
+    assert a.switch == 1
+    assert b.switch in (2, 3)
+    assert c.switch == 4
+    pa = a.switch.encode() + xdrlib.Integer(123).encode()
+    pb = b.switch.encode() + xdrlib.String(size=10)(b'hallo').encode()
+    pc = c.switch.encode() + xdrlib.Boolean(True).encode()
+    assert a.encode() == pa
+    assert b.encode() == pb
+    assert c.encode() == pc
+    a1 = UnionWithDefault.decode(pa)
+    b1 = UnionWithDefault.decode(pb)
+    c1 = UnionWithDefault.decode(pc)
+    assert a1 == a
+    assert b1 == b
+    assert c1 == c
+    assert a1.encode() == pa
+    assert b1.encode() == pb
+    assert c1.encode() == pc
 
 
 def test_union_subclassing_fails_for_invalid_swith_type():

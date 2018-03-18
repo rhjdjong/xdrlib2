@@ -77,6 +77,10 @@ class XdrType(metaclass=_MetaXdrType):
         raise NotImplementedError
 
     @classmethod
+    def _getattr(cls, name):
+        raise AttributeError(f"'{cls.__class__.__name__:s}' object '{cls.__name__:s}' has no attribute '{name:s}'")
+
+    @classmethod
     def _get_item(cls, index):
         raise NotImplementedError(f"class '{cls.__name__:s}' does not support indexing.")
 

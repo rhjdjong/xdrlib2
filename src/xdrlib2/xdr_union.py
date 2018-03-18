@@ -113,7 +113,7 @@ class Union(XdrType):
             cls._union_switch_type = switch_type
             cls._union_arm_name = {}
             cls._union_arm_type = {}
-            cls._union_arm_type_by_name = {}
+            cls._union_switch_by_name = {}
             cls._union_arm_info = {}
             cls._abstract = False
         else:
@@ -183,8 +183,13 @@ class Union(XdrType):
         elif name == 'switch_type':
             return cls._union_switch_type
         else:
-            return super()._getattr(name)
-
+            try:
+                index = cls._union_switch_by_name[name]
+            except KeyError:
+                pass
+            else:
+                return cls._get_item(index)
+        return super()._getattr(name)
 
     def __getattr__(self, name):
         if name in ('switch', self._union_switch_name):
@@ -248,10 +253,26 @@ class Union(XdrType):
 
     @classmethod
     def case(cls, *args, **kwargs):
-        cls._get_arm_data_from_arguments(*args, **kwargs, default=False)
+        if cls._final and len(args) == 1 and not kwargs:
+            case_value = args[0]
+            arm_class = cls._union_arm_type.get(case_value)
+            arm_name = cls._union_arm_name.get(case_value)
+            if arm_class is None:
+                raise ValueError(f"'{cls.__name__:s}' union class "
+                                 f"does not have an arm for case value '{case_value:d}'")
+            return arm_name, arm_class
+        else:
+            cls._get_arm_data_from_arguments(*args, **kwargs, default=False)
 
     @classmethod
     def default(cls, *args, **kwargs):
+        if cls._final and not args and not kwargs:
+            arm_class = cls._union_arm_type.get('default')
+            arm_name = cls._union_arm_name.get('default')
+            if arm_class is None:
+                raise ValueError(f"'{cls.__name__:s}' union class "
+                                 f"does not have a default arm")
+            return arm_name, arm_class
         if args or kwargs:
             cls._get_arm_data_from_arguments(*args, **kwargs, default=True)
         cls._final = True
@@ -291,16 +312,23 @@ class Union(XdrType):
                 raise ValueError(f"case clause requires one or more switch values.")
             args = (cls._union_switch_type(v) for v in args)
 
-        if arm_name and (arm_name == cls._union_switch_name or arm_name in cls._union_arm_type_by_name):
+        if arm_name and (arm_name == cls._union_switch_name or arm_name in cls._union_switch_by_name):
             raise ValueError(f"duplicate name '{arm_name:s}' in union class '{cls.__name__:s}'")
 
+        if issubclass(arm_type, cls):
+            if not issubclass(arm_type, Optional):
+                raise TypeError(f"infinite recursion '{arm_name:s}={arm_type.__name__:s}' "
+                                f"for class '{cls.__name__:s}'")
+        elif not arm_type._final:
+            raise TypeError(f"abstract or unfinished class '{arm_name:s}={arm_type.__name__:s}' "
+                            f"for class '{cls.__name__:s}'")
         # Create a new subclass that is also a subclass of the arm type
         arm_class = cls.typedef(cls.__name__, arm_type, type=arm_type)
         for switch_value in args:
             cls._union_arm_name[switch_value] = arm_name
             cls._union_arm_type[switch_value] = arm_class
             if arm_name:
-                cls._union_arm_type_by_name[arm_name] = arm_class
+                cls._union_switch_by_name[arm_name] = switch_value
 
     # @property
     # def switch(self):
