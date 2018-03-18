@@ -315,6 +315,13 @@ class Union(XdrType):
         if arm_name and (arm_name == cls._union_switch_name or arm_name in cls._union_switch_by_name):
             raise ValueError(f"duplicate name '{arm_name:s}' in union class '{cls.__name__:s}'")
 
+        if issubclass(arm_type, cls):
+            if not issubclass(arm_type, Optional):
+                raise TypeError(f"infinite recursion '{arm_name:s}={arm_type.__name__:s}' "
+                                f"for class '{cls.__name__:s}'")
+        elif not arm_type._final:
+            raise TypeError(f"abstract or unfinished class '{arm_name:s}={arm_type.__name__:s}' "
+                            f"for class '{cls.__name__:s}'")
         # Create a new subclass that is also a subclass of the arm type
         arm_class = cls.typedef(cls.__name__, arm_type, type=arm_type)
         for switch_value in args:

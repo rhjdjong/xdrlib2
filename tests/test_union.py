@@ -28,6 +28,8 @@ SimpleUnionFromEnum.case(2, number=xdrlib.Integer)
 SimpleUnionFromEnum.case(3, logic=xdrlib.Boolean)
 SimpleUnionFromEnum.default()
 
+UnfinishedUnion = xdrlib.Union(kind=xdrlib.Integer)
+
 
 def test_example():
     assert issubclass(UnionWithDefault, xdrlib.Union)
@@ -55,6 +57,25 @@ def test_invalid_switch_type():
     with pytest.raises(ValueError):
         casetype = UnionWithDefault['hallo']
 
+
+@pytest.mark.parametrize('type', [
+    xdrlib.String,
+    xdrlib.Enumeration,
+    xdrlib.VarArray,
+    xdrlib.Union(discr=xdrlib.Integer)
+])
+def test_union_creation_with_non_final_arm_type_fails(type):
+    with pytest.raises(TypeError):
+        UnfinishedUnion.case(1, arm=type)
+
+
+def test_union_creation_with_non_optional_recursion_fails():
+    with pytest.raises(TypeError):
+        UnfinishedUnion.case(1, arm=UnfinishedUnion)
+
+
+# def test_union_creation_with_optional_recursion_works():
+#     UnfinishedUnion.case(1, arm=xdrlib.Optional(UnfinishedUnion))
 
 def test_simple_union_invalid_initialization():
     with pytest.raises(ValueError):

@@ -100,9 +100,9 @@ class Optional(XdrType):
             if kwargs or len(args) != 1 or not inspect.isclass(args[0]) or not issubclass(args[0], XdrType):
                 raise TypeError(f"cannot apply Optional class wrapper to {args!s}, {kwargs!s}")
             wrapped_class = args[0]
-            if not wrapped_class._final:
+            if wrapped_class._abstract:
                 raise TypeError(f"cannot apply Optional class wrapper to "
-                                f"unfinished XDR class '{wrapped_class.__name__:s}'")
+                                f"abstract XDR class '{wrapped_class.__name__:s}'")
             optional_class = cls._make_optional_class(wrapped_class)
             return optional_class
 
