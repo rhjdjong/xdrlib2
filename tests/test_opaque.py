@@ -79,7 +79,7 @@ def test_subclassing_with_size_failse():
 def test_subclassing_without_changes_works():
     class Other(MyFixedOpaque):
         pass
-    assert Other.size() == MyFixedOpaque.size()
+    assert Other.size == MyFixedOpaque.size
 
 
 def test_modifying_size_fails():
@@ -203,3 +203,50 @@ def test_slice_replacement_fails_with_wrong_data_type(seqtype, invalid):
     b = seqtype(b'0123456789')
     with pytest.raises((ValueError, TypeError)):
         b[3:5] = invalid
+
+
+def test_optional_fixed_length_opaque():
+    optType = xdrlib.Optional(xdrlib.FixedOpaque.typedef(size=5))
+    byte_str = b'\0\xff\xab\xcd\x01'
+    yes = optType(byte_str)
+    no = optType()
+    assert isinstance(yes, optType)
+    assert yes == byte_str
+    assert no == None
+    pyes = xdrlib.TRUE.encode() + byte_str + b'\0\0\0'
+    pno = xdrlib.FALSE.encode()
+    assert yes.encode() == pyes
+    assert no.encode() == pno
+    yes2 = optType.decode(pyes)
+    assert yes2 == yes
+    assert yes2.encode() == pyes
+    no2 = optType.decode(pno)
+    assert no2 == no
+    assert no2.encode() == pno
+
+
+@pytest.mark.parametrize('seqtype', [
+    MyVarOpaque,
+    MyString
+])
+def test_optional_variable_length_opaque(seqtype):
+    optType = xdrlib.Optional(seqtype)
+    byte_str = b'\xff\xab\xcd\x01'
+    yes = optType(byte_str)
+    no = optType()
+    assert isinstance(yes, optType)
+    assert isinstance(no, optType)
+    assert isinstance(yes, seqtype)
+    assert isinstance(no, xdrlib.Void)
+    assert yes == byte_str
+    assert no == None
+    pyes = xdrlib.TRUE.encode() + b'\0\0\0\x04' + byte_str
+    pno = xdrlib.FALSE.encode()
+    assert yes.encode() == pyes
+    assert no.encode() == pno
+    yes2 = optType.decode(pyes)
+    assert yes2 == yes
+    assert yes2.encode() == pyes
+    no2 = optType.decode(pno)
+    assert no2 == no
+    assert no2.encode() == pno

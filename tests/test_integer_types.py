@@ -4,7 +4,7 @@
 
 import pytest
 import xdrlib2 as xdrlib
-
+from xdrlib2.xdr_integer import XdrInteger
 
 def test_default_instantiation():
     assert xdrlib.Integer() == 0
@@ -70,3 +70,40 @@ def test_cannot_modify_parameters_of_integer_types(xdrtype):
         xdrtype._max = 0
     with pytest.raises(AttributeError):
         del xdrtype._min
+
+
+def test_anonymous_subclass():
+    i_bit = XdrInteger(min=0, max=2)
+    assert issubclass(i_bit, XdrInteger)
+    assert issubclass(i_bit, int)
+    zero = i_bit(0)
+    one = i_bit(1)
+    assert isinstance(zero, i_bit)
+    assert isinstance(one, i_bit)
+    assert zero == 0
+    assert one == 1
+    assert zero.encode() == b'\0\0\0\0'
+    assert one.encode() == b'\x01\0\0\0'
+    new_zero = i_bit.decode(b'\0\0\0\0')
+    new_one = i_bit.decode(b'\x01\0\0\0')
+    assert new_zero == zero
+    assert new_one == one
+    assert isinstance(new_zero, i_bit)
+    assert isinstance(new_one, i_bit)
+    assert new_zero.encode() == b'\0\0\0\0'
+    assert new_one.encode() == b'\x01\0\0\0'
+
+def test_anonymous_subclass_error_situations():
+    i_bit = XdrInteger(min=0, max=2)
+    with pytest.raises(ValueError):
+        i_bit(2)
+    with pytest.raises(TypeError):
+        xdrlib.Integer(min=0, max=2)
+    with pytest.raises(TypeError):
+        XdrInteger(min=3)
+    with pytest.raises(TypeError):
+        XdrInteger(min=3, max=5, extra=7)
+    with pytest.raises(ValueError):
+        XdrInteger(min=2, max=0)
+
+

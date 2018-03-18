@@ -3,8 +3,35 @@
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
 import inspect
+import re
+
+reserved_names = (
+    'bool',
+    'case',
+    'const',
+    'default',
+    'double',
+    'quadruple',
+    'enum',
+    'float',
+    'hyper',
+    'int',
+    'opaque',
+    'string',
+    'struct',
+    'switch',
+    'typedef',
+    'union',
+    'unsigned',
+    'void',
+)
 
 class _MetaXdrType(type):
+    def __init__(cls, name, bases, dct, **kwargs):
+        super().__init__(name, bases, dct, **kwargs)
+        # Execute class-specific initialization
+        cls._init_class(dct, **kwargs)
+
     # Concrete XDR types contain parameters that determine the
     # allowed values and operations.
     # To prevent inadvertent modifications of these parameters,
@@ -19,12 +46,12 @@ class _MetaXdrType(type):
             raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
         super().__delattr__(name)
 
-    # def __getattr__(cls, name):
-    #     return cls._getattr(name)
-    #     # if name in cls._names:
-    #     #     return cls._names[name]
-    #     # raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
-    #     #                      f"has no attribute '{name:s}'")
+    def __getattr__(cls, name):
+        return cls._getattr(name)
+        # if name in cls._names:
+        #     return cls._names[name]
+        # raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
+        #                      f"has no attribute '{name:s}'")
 
     def __getitem__(cls, index):
         return cls._get_item(index)
@@ -33,12 +60,47 @@ class _MetaXdrType(type):
 class XdrType(metaclass=_MetaXdrType):
     _final = False
     _abstract = True
-    _parameters = {}
-    _names = {}
+    _parameters = ()
+
+    @classmethod
+    def _init_class(cls, dct, **kwargs):
+        pass
+
+    @classmethod
+    def _create_anonymous_subclass(cls, *args, **kwargs):
+        if args:
+            raise ValueError(f"Cannot instantiate abstract class {cls.__name__:s} for {args!s}")
+        return cls.typedef(**kwargs)
+
+    @classmethod
+    def _validate_arguments(cls, *args, **kwargs):
+        raise NotImplementedError
 
     @classmethod
     def _get_item(cls, index):
         raise NotImplementedError(f"class '{cls.__name__:s}' does not support indexing.")
+
+    @classmethod
+    def _get_class_creation_information(cls, **kwargs):
+        if cls._final:
+            if kwargs:
+                # This is subclassing a concrete type with additional or modified parameters
+                raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
+            return {}  # Subclassing without modifications is OK
+
+        parameters = {n: v for n, v in vars(cls).items() if not n.startswith('_')}
+        for n in kwargs:
+            if n in parameters:
+                raise ValueError(f"class '{cls.__name__:s}' got duplicate class parameter '{n:s}'")
+        parameters.update(kwargs)
+
+        if cls._final and parameters:
+            raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
+
+        for n in parameters:
+            if n in vars(cls):
+                delattr(cls, n)
+        return parameters
 
     @classmethod
     def _get_names_from_class_body(cls, *args):
@@ -74,6 +136,13 @@ class XdrType(metaclass=_MetaXdrType):
         return obj
 
     @staticmethod
+    def _is_valid_xdr_name(name):
+        if name in reserved_names:
+            return False
+        return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
+
+
+    @staticmethod
     def padding(size):
         return b'\0' * ((4 - size % 4) % 4)
 
@@ -88,17 +157,23 @@ class XdrType(metaclass=_MetaXdrType):
         return bstr[:size]
 
     @classmethod
-    def typedef(cls, name=None, *bases, **kwargs):
-        type_name = name if name else '_'
-        class_dict = {k: v for k, v in kwargs.items() if k not in cls._parameters}
-        for k in class_dict:
-            del kwargs[k]
-        new_type = cls.__class__(type_name, (cls,) + bases, class_dict, **kwargs)
+    def typedef(cls, _xdr_type_name=None, *bases, **kwargs):
+        type_name = _xdr_type_name if _xdr_type_name else cls.__name__
+        new_type = cls.__class__(type_name, (cls,) + bases, {}, **kwargs)
         return new_type
 
 
 class XdrAtomic(XdrType):
     _packed_size = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:
+            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
+        return super().__new__(cls, *args, **kwargs)
+
+    @classmethod
+    def _validate_arguments(cls, *args, **kwargs):
+        pass  # Validation is best done during instance creation.
 
     @classmethod
     def packed_size(cls):
@@ -111,6 +186,10 @@ class Void(XdrType):
 
     def __new__(cls, _=None):
         return super().__new__(cls)
+
+    @classmethod
+    def _validate_arguments(cls):
+        pass
 
     def encode(self):
         return b''

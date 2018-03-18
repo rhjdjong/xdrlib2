@@ -505,3 +505,49 @@ def test_float_types_cannot_be_modified(xdrtype):
         xdrtype.fraction_size = 3
     with pytest.raises(AttributeError):
         del xdrtype.exponent_bias
+
+
+@pytest.mark.parametrize('xdrtype', [
+    xdrlib.Float,
+    xdrlib.Double,
+    xdrlib.Quadruple
+])
+def test_optional_float_types(xdrtype):
+    Opt = xdrlib.Optional(xdrtype)
+
+    v = Opt()
+    assert isinstance(v, Opt)
+    assert isinstance(v, xdrlib.Void)
+    assert not isinstance(v, xdrtype)
+    assert v == None
+    pv = b'\0\0\0\0'
+    assert v.encode() == pv
+    v1 = Opt.decode(pv)
+    assert v1 == v
+    assert v1.encode() == pv
+
+    r = Opt('3.14')
+    assert isinstance(r, Opt)
+    assert isinstance(r, xdrtype)
+    assert r == xdrtype('3.14')
+    pr = xdrlib.TRUE.encode() + xdrtype('3.14').encode()
+    assert r.encode() == pr
+    r1 = Opt.decode(pr)
+    assert r1 == r
+    assert r1.encode() == pr
+
+
+def test_anonymous_float_types():
+    from xdrlib2.xdr_float import XdrFloat
+    Float8 = XdrFloat(exponent_size=3, fraction_size=4)
+    n = Float8(0.75)
+    assert isinstance(n, Float8)
+    assert isinstance(n, XdrFloat)
+    assert isinstance(n, float)
+    assert n == 0.75
+    p = b'\x28\0\0\0'
+    assert n.encode() == p
+    n1 = Float8.decode(p)
+    assert n1 == n
+    assert n1.encode() == p
+

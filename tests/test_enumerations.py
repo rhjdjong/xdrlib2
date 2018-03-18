@@ -10,16 +10,21 @@ import sys
 current_module = sys.modules[__name__]
 
 
-class Colors(xdrlib.Enumeration, RED=2, YELLOW=3, BLUE=5):
-    pass
+Colors = xdrlib.Enumeration.typedef('Colors', RED=2, YELLOW=3, BLUE=5)
+
+RED = Colors.RED
+YELLOW = Colors.YELLOW
+BLUE = Colors.BLUE
 
 
-class Animals(xdrlib.Enumeration):
+class Animals(xdrlib.Enumeration, HORSE=5):
     CAT = 1
     DOG = 2
-    HORSE = 5
 
-EXISTING_VALUE = 3
+CAT = Animals.CAT
+DOG = Animals.DOG
+HORSE = Animals.HORSE
+
 
 def test_enumeration_with_subclass_arguments():
     assert issubclass(Colors, xdrlib.Enumeration)
@@ -82,7 +87,7 @@ def test_cannot_intantiate_abstract_baseclass():
 
 def test_cannot_subclass_concrete_baseclass():
     with pytest.raises(TypeError):
-        class SubColor(Colors, white=10):
+        class SubColor(Colors, WHITE=10):
             pass
 
 
@@ -103,15 +108,14 @@ def test_cannot_delete_enumeration_identifiers():
 
 def test_cannot_create_enumeration_that_overrides_module_attribute():
     with pytest.raises(ValueError):
-        xdrlib.Enumeration.typedef('InvalidEnum', OK_NAME=1, EXISTING_VALUE=2)
+        class InvalidEnum(xdrlib.Enumeration, OK_NAME=1, EXISTING_VALUE=2):
+            EXISTING_VALUE = 3
 
 
 def test_can_create_enumeration_with_python_keywords():
     weird_enum = xdrlib.Enumeration.typedef('Weird', **{'id': 1, 'if': 2, 'while': 3})
     assert weird_enum.id == 1
     assert weird_enum('if') == 2
-    assert getattr(current_module, 'while') == 3
-    assert 'while' in globals()
 
 
 def test_packing_of_enumerations():
@@ -135,3 +139,57 @@ def test_boolean():
     assert xdrlib.FALSE == False
     assert xdrlib.Boolean(True) == xdrlib.TRUE
     assert xdrlib.Boolean(False) == xdrlib.FALSE
+
+
+def test_anonymous_enumeration():
+    anon = xdrlib.Enumeration(XX=3, YY=4)
+    assert issubclass(anon, xdrlib.Enumeration)
+    xx = anon.XX
+    assert isinstance(xx, anon)
+    assert xx == 3
+    assert xx.encode() == b'\0\0\0\x03'
+    assert anon.decode(b'\0\0\0\x04') == anon.YY
+
+
+def test_optional_enumeration():
+    OptColor = xdrlib.Optional(Colors)
+    n = OptColor()
+    assert isinstance(n, OptColor)
+    assert isinstance(n, xdrlib.Void)
+    assert n == None
+    pn = b'\0\0\0\0'
+    assert n.encode() == pn
+    n1 =  OptColor.decode(pn)
+    assert n1 == n
+    assert n1.encode() == pn
+
+    r = OptColor(2)
+    assert isinstance(r, OptColor)
+    assert isinstance(r, Colors)
+    assert r == Colors.RED
+    pr = b'\0\0\0\x01' b'\0\0\0\x02'
+    assert r.encode() == pr
+    r1 = OptColor.decode(pr)
+    assert r1 == r
+    assert r1.encode() == pr
+
+    y = OptColor('YELLOW')
+    assert isinstance(y, OptColor)
+    assert isinstance(y, Colors)
+    assert y == Colors.YELLOW
+    py = b'\0\0\0\x01' b'\0\0\0\x03'
+    assert y.encode() == py
+    y1 = OptColor.decode(py)
+    assert y1 == y
+    assert y1.encode() == py
+
+    b = OptColor(Colors.BLUE)
+    assert isinstance(b, OptColor)
+    assert isinstance(b, Colors)
+    assert b == Colors.BLUE
+    pb = b'\0\0\0\x01' b'\0\0\0\x05'
+    assert b.encode() == pb
+    b1 = OptColor.decode(pb)
+    assert b1 == b
+    assert b1.encode() == pb
+

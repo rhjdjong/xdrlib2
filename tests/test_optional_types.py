@@ -70,12 +70,3 @@ def test_verify_class_hierarchy():
     assert type(x).__bases__ == (optional_integer_type, xdrlib.Integer)
     assert type(y).__bases__ == (optional_integer_type, xdrlib.Void)
 
-
-def test_optional_fixed_length():
-    optType = xdrlib.Optional(xdrlib.FixedOpaque.typedef(size=5))
-    byte_str = b'\0\xff\xab\xcd\x01'
-    yes = optType(byte_str)
-    no = optType()
-    assert isinstance(yes, optType)
-    assert yes == byte_str
-    assert no == None

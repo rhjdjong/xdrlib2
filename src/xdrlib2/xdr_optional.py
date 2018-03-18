@@ -8,8 +8,6 @@ from .xdr_core import XdrType, Void
 from .xdr_enumeration import Boolean, FALSE, TRUE
 
 class Optional(XdrType):
-    _final = False
-
     """
     Optional(cls) --> optional class.
 
@@ -74,6 +72,22 @@ class Optional(XdrType):
     True
     """
 
+    _final = False
+
+    # def __init_subclass__(cls, **kwargs):
+    #     bases = cls.__bases__
+    #     for index, base in enumerate(bases):
+    #         if base is Optional:
+    #             break
+    #     else:
+    #         raise TypeError('Optional class must wrap an existing class')
+    #     if index + 1 < len(bases):
+    #         wrapped_class = bases[index + 1]
+    #         cls.case(TRUE, _=wrapped_class)
+    #         cls.default()
+    #     else:
+    #         raise TypeError('Optional class must wrap an existing class')
+
     def __new__(cls, *args, **kwargs):
         # Class Optional serves both as a mix-in class for optional classes
         # and as a factory for optional classes.
@@ -85,7 +99,11 @@ class Optional(XdrType):
             # class is called to wrap an existing class.
             if kwargs or len(args) != 1 or not inspect.isclass(args[0]) or not issubclass(args[0], XdrType):
                 raise TypeError(f"cannot apply Optional class wrapper to {args!s}, {kwargs!s}")
-            optional_class = cls._make_optional_class(args[0])
+            wrapped_class = args[0]
+            if not wrapped_class._final:
+                raise TypeError(f"cannot apply Optional class wrapper to "
+                                f"unfinished XDR class '{wrapped_class.__name__:s}'")
+            optional_class = cls._make_optional_class(wrapped_class)
             return optional_class
 
         if cls._is_instantiated_as_absent(*args, **kwargs):
@@ -123,6 +141,7 @@ class Optional(XdrType):
         optional_class._original_class = original_class
         optional_class._add_present_class(original_class)
         optional_class._add_absent_class()
+        optional_class._abstract = False
         optional_class._final = True
         return optional_class
 
@@ -135,3 +154,29 @@ class Optional(XdrType):
     def _add_present_class(cls, original_class):
         present_class = cls.typedef(cls.__name__, original_class)
         cls._present_class = present_class
+
+    @classmethod
+    def _get_item(cls, name):
+        return cls._original_class._get_item(name)
+
+    @classmethod
+    def _getattr(cls, name):
+        return cls._original_class._getattr(name)
+
+    # def __eq__(self, other):
+    #     return super().__eq__(other)
+    #
+    # def __ne__(self, other):
+    #     return super().__ne__(other)
+    #
+    # def __lt__(self, other):
+    #     return super().__lt__(other)
+    #
+    # def __le__(self, other):
+    #     return super().__le__(other)
+    #
+    # def __gt__(self, other):
+    #     return super().__gt__(other)
+    #
+    # def __ge__(self, other):
+    #     return super().__ge__(other)

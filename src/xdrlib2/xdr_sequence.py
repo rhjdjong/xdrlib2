@@ -9,7 +9,13 @@ from .xdr_integer import UnsignedInteger
 
 
 class XdrSequence(XdrType):
-    _variable = None
+
+    # def __new__(cls, *args, **kwargs):
+    #     if cls._abstract:  # Anonymous subclass creation
+    #         return cls._create_anonymous_subclass(*args, **kwargs)
+    #     else:  # Concrete class instantiation
+    #         return cls._create_concrete_instance(*args, **kwargs)
+
 
     @classmethod
     def _init_concrete_subclass(cls, **kwargs):
@@ -17,7 +23,7 @@ class XdrSequence(XdrType):
 
     @classmethod
     def _verify_size(cls, size):
-        return cls.minsize() <= size <= cls.size()
+        return cls.minsize <= size <= cls.size
 
     def enocde_items(self):
         raise NotImplementedError(f"concrete XDR sequence type '{self.__class__.__name__:s}' "
@@ -29,30 +35,31 @@ class XdrSequence(XdrType):
                                   f"must implement classmethod 'parse_items'")
 
     def encode(self):
-        if self._variable:
+        if self.variable:
             return UnsignedInteger(len(self)).encode() + self.encode_items()
         else:
             return self.encode_items()
 
     @classmethod
     def parse(cls, bstr):
-        if cls._variable:
+        if cls.variable:
             itemcount, bstr = UnsignedInteger.parse(bstr)
         else:
-            itemcount = cls.size()
+            itemcount = cls.size
         return cls.parse_items(bstr, itemcount)
 
-    @classmethod
-    def size(cls):
-        return cls._size
-
-    @classmethod
-    def minsize(cls):
-        return 0 if cls._variable else cls.size()
-
-    @classmethod
-    def type(cls):
-        return cls._parameters['type']
+    # @classmethod
+    # def size(cls):
+    #     return cls._sequence_size
+    #
+    # @classmethod
+    # def minsize(cls):
+    #     return 0 if cls._sequence_variable else cls.size()
+    #
+    #
+    # @classmethod
+    # def type(cls):
+    #     return cls._sequence_type
 
     def __iadd__(self, other):
         self[:] = self + other
@@ -79,12 +86,12 @@ class XdrSequence(XdrType):
         self[pos:pos] = value
 
     def remove(self, value):
-        if not self._variable:
+        if not self.variable:
             raise ValueError(f"item removal leads to invalid length for '{self.__class__.__name__:s}' type")
         super().remove(value)
 
     def pop(self, pos=-1):
-        if not self._variable:
+        if not self.variable:
             raise ValueError(f"pop operation leads to invalid length for '{self.__class__.__name__:s}' type")
         return super().pop(pos)
 
@@ -113,35 +120,76 @@ class XdrSequence(XdrType):
 
 
 class XdrOpaque(XdrSequence, bytearray):
+    _parameters = ('variable', 'size')
+    _opaque_parameters = {n: None for n in _parameters}
 
-    def __init_subclass__(cls, size=None):
-        parameters = cls._get_names_from_class_body('size')
-        if size is not None:
-            parameters['size'] = size
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_creation_information(**kwargs)
         if cls._final:
             if parameters:
-                # This is subclassing a concrete enum type with additional items
-                raise TypeError(f"cannot subclass '{cls.__name__:s}' with modifications")
-            return
+                raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
+                                f"with additional enumeration values {parameters!s}")
+        else:
+            extra_names = set(parameters.keys()) - set(cls._parameters)
+            if extra_names:
+                raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
+            if cls._abstract:
+                cls._opaque_parameters = cls._opaque_parameters.copy()
+                for name, value in parameters.items():
+                    cls._opaque_parameters[name] = value
+                    if name == 'size':
+                        if cls.variable:
+                            minsize = 0
+                        else:
+                            minsize = value
+                        cls._opaque_parameters['minsize'] = minsize
+                for name in cls._parameters:
+                    if getattr(cls, name) is None:
+                        break
+                else:
+                    # Complete subclass
+                    cls._abstract = False
+                    cls._final = True
 
-        if parameters:
-            if not all(v is not None for v in parameters.values()):
-                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
-            cls._size = parameters['size']
-            cls._final = True
+    @classmethod
+    def _getattr(cls, name):
+        try:
+            return cls._opaque_parameters[name]
+        except KeyError:
+            raise AttributeError(f"class '{cls.__name__:s}' "
+                                 f"has no attribute '{name:s}'") from None
 
-    def __new__(cls, value=None):
-        if not cls._final:
-            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-        return super().__new__(cls, cls.minsize() if value is None else value)
 
-    def __init__(self, value=None):
+    def __getattr__(self, name):
+        try:
+            return self.__class__._opaque_parameters[name]
+        except KeyError:
+            raise AttributeError(f"'{self.__class__.__name__:s}' object "
+                                 f"has no attribute '{name:s}'") from None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:  # Anonymous subclass creation
+            return cls._create_anonymous_subclass(*args, **kwargs)
+        else:  # Concrete class instantiation
+            return cls._create_concrete_instance(*args, **kwargs)
+    # def __new__(cls, value=None):
+    #     if not cls._final:
+    #         raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
+    #     return super().__new__(cls, cls.minsize if value is None else value)
+
+    @classmethod
+    def _create_concrete_instance(cls, value=None, **kwargs):
         if value is None:
-            value = bytes(self.minsize())
+            value = bytes(cls.minsize)
+        return super().__new__(cls, value, **kwargs)
+
+    def __init__(self, value=None, **kwargs):
+        if value is None:
+            value = bytes(self.minsize)
         if not self._verify_size(len(value)):
             raise ValueError(f"invalid sequence length '{len(value):d}' "
                              f"for '{self.__class__.__name__:s}' instance")
-        super().__init__(value)
+        super().__init__(value, **kwargs)
 
     def _make_item(self, value):
         if isinstance(value, int) and 0 <= value < 256:
@@ -164,50 +212,81 @@ class XdrOpaque(XdrSequence, bytearray):
 
 
 class XdrArray(XdrSequence, list):
+    _parameters = ('variable', 'size', 'type')
+    _array_parameters = {n: None for n in _parameters}
 
-    def __init_subclass__(cls, size=None, type=None):
-        parameters = cls._get_names_from_class_body('size', 'type')
-        if size is not None:
-            parameters['size'] = size
-        if type is not None:
-            parameters['type'] = type
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_creation_information(**kwargs)
         if cls._final:
             if parameters:
-                # This is subclassing a concrete enum type with additional items
-                raise TypeError(f"cannot subclass '{cls.__name__:s}' with modifications")
-            return
-
-        if parameters:
-            if not all(v is not None for v in parameters.values()):
-                raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
-            cls._size = parameters['size']
-            cls._type = parameters['type']
-            cls._final = True
-
-    def __new__(cls, value=None):
-        if not cls._final:
-            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-        return super().__new__(cls, [cls._type()] * cls.minsize() if value is None else value)
-
-    def __init__(self, value=None):
-        if value is None:
-            value = [self._type()] * self.minsize()
+                raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
+                                f"with additional enumeration values {parameters!s}")
         else:
-            value = [self._type(x) for x in value]
-        if not self._verify_size(len(value)):
-            raise ValueError(f"invalid sequence length '{len(value):d}' "
-                             f"for '{self.__class__.__name__:s}' instance")
-        super().__init__(value)
+            extra_names = set(parameters.keys()) - set(cls._parameters)
+            if extra_names:
+                raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
+            if cls._abstract:
+                cls._array_parameters = cls._array_parameters.copy()
+                for name, value in parameters.items():
+                    cls._array_parameters[name] = value
+                    if name == 'size':
+                        if cls.variable:
+                            minsize = 0
+                        else:
+                            minsize = value
+                        cls._array_parameters['minsize'] = minsize
+                for name in cls._parameters:
+                    if getattr(cls, name) is None:
+                        break
+                else:
+                    # Complete subclass
+                    cls._abstract = False
+                    cls._final = True
 
     @classmethod
-    def type(cls):
-        return cls._type
+    def _getattr(cls, name):
+        try:
+            return cls._array_parameters[name]
+        except KeyError:
+            raise AttributeError(f"class '{cls.__name__:s}' "
+                                 f"has no attribute '{name:s}'") from None
+
+
+    def __getattr__(self, name):
+        try:
+            return self.__class__._array_parameters[name]
+        except KeyError:
+            raise AttributeError(f"'{self.__class__.__name__:s}' object "
+                                 f"has no attribute '{name:s}'") from None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._abstract:  # Anonymous subclass creation
+            return cls._create_anonymous_subclass(*args, **kwargs)
+        else:  # Concrete class instantiation
+            return cls._create_concrete_instance(*args, **kwargs)
+
+    @classmethod
+    def _create_concrete_instance(cls, value=None, **kwargs):
+        if value is None:
+            value = [cls.type()] * cls.minsize
+        return super().__new__(cls, value, **kwargs)
+
+    def __init__(self, value=None, **kwargs):
+        if value is None:
+            lst = [self.type()] * self.minsize
+        else:
+            lst = [self.type(x) for x in value]
+        if not self._verify_size(len(lst)):
+            raise ValueError(f"invalid sequence length '{len(lst):d}' "
+                             f"for '{self.__class__.__name__:s}' instance")
+        super().__init__(lst, **kwargs)
+
 
     def _make_item(self, value):
-        return self._type(value)
+        return self.type(value)
 
     def _make_slice(self, value):
-        return (self._type(v) for v in value)
+        return (self.type(v) for v in value)
 
     def encode_items(self):
         return b''.join(x.encode() for x in self)
@@ -216,23 +295,22 @@ class XdrArray(XdrSequence, list):
     def parse_items(cls, bstr, size):
         items = []
         for _ in range(size):
-            item, bstr = cls._type.parse(bstr)
+            item, bstr = cls.type.parse(bstr)
             items.append(item)
         return cls(items), bstr
 
 
-FixedOpaque = XdrOpaque.typedef('FixedOpaque', _variable=False)
+FixedOpaque = XdrOpaque.typedef('FixedOpaque', variable=False)
 
-VarOpaque = XdrOpaque.typedef('VarOpaque', _variable=True)
+VarOpaque = XdrOpaque.typedef('VarOpaque', variable=True)
 
-String = XdrOpaque.typedef('String', _variable=True)
+String = XdrOpaque.typedef('String', variable=True)
 
-class FixedArray(XdrArray):
-    _variable = False
+FixedArray = XdrArray.typedef('FixedArray', variable=False)
 
 
 class VarArray(XdrArray):
-    _variable = True
+    variable = True
 
 
 

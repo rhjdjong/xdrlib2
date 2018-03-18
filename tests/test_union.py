@@ -6,13 +6,13 @@ import pytest
 import xdrlib2 as xdrlib
 
 
-datatype = xdrlib.Union.typedef('datatype', kind=xdrlib.Integer)
-datatype.case(1, number=xdrlib.Integer)
-datatype.case(2, 3, text=xdrlib.String)
-datatype.case(4, flag=xdrlib.Boolean)
-datatype.default(xdrlib.Void)
+UnionWithDefault = xdrlib.Union.typedef('UnionWithDefault', kind=xdrlib.Integer)
+UnionWithDefault.case(1, number=xdrlib.Integer)
+UnionWithDefault.case(2, 3, text=xdrlib.String)
+UnionWithDefault.case(4, flag=xdrlib.Boolean)
+UnionWithDefault.default(xdrlib.Void)
 
-class SimpleUnion(xdrlib.Union, discr=xdrlib.Integer):
+class SimpleUnion(xdrlib.Union, discr=xdrlib.UnsignedInteger):
     pass
 SimpleUnion.case(1, xdrlib.Void)
 SimpleUnion.case(2, flag=xdrlib.Boolean)
@@ -30,22 +30,22 @@ SimpleUnionFromEnum.default()
 
 
 def test_example():
-    assert issubclass(datatype, xdrlib.Union)
+    assert issubclass(UnionWithDefault, xdrlib.Union)
 
-    casetype = datatype[1]
-    assert issubclass(casetype, datatype)
+    casetype = UnionWithDefault[1]
+    assert issubclass(casetype, UnionWithDefault)
     assert issubclass(casetype, xdrlib.Integer)
 
     casevalue = casetype(5)
     assert isinstance(casevalue, casetype)
-    assert isinstance(casevalue, datatype)
+    assert isinstance(casevalue, UnionWithDefault)
     assert isinstance(casevalue, xdrlib.Integer)
 
     p = b'\0\0\0\x01' b'\0\0\0\x05'
     assert casevalue.encode() == p
-    n = datatype.decode(p)
+    n = UnionWithDefault.decode(p)
     assert isinstance(n, casetype)
-    assert isinstance(n, datatype)
+    assert isinstance(n, UnionWithDefault)
     assert isinstance(n, xdrlib.Integer)
     assert n == casevalue
     assert n.encode() == p
@@ -53,7 +53,7 @@ def test_example():
 
 def test_invalid_switch_type():
     with pytest.raises(ValueError):
-        casetype = datatype['hallo']
+        casetype = UnionWithDefault['hallo']
 
 
 def test_simple_union_invalid_initialization():
@@ -163,12 +163,17 @@ def test_simple_union_default():
     assert nu == u
 
 
-# def test_optional_union():
-#     OptUnion = xdrlib.Optional(SimpleUnion)
-#     y1 = OptUnion[1](None)
-#     y2 = OptUnion[2](True)
-#     y3 = OptUnion[3](b'hallo')
-#     y4 = OptUnion[4](13)
-#     y5 = OptUnion[5](b'dumb')
-#     no = OptUnion()
+def test_union_subclassing_fails_for_invalid_swith_type():
+    with pytest.raises(TypeError):
+        xdrlib.Union(discr=xdrlib.Hyper)
+
+
+def test_optional_union():
+    OptUnion = xdrlib.Optional(SimpleUnion)
+    y1 = OptUnion[1](None)
+    y2 = OptUnion[2](True)
+    y3 = OptUnion[3](b'hallo')
+    y4 = OptUnion[4](13)
+    y5 = OptUnion[5](b'dumb')
+    no = OptUnion()
 

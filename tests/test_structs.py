@@ -74,3 +74,48 @@ def test_struct_field_modification_fails_with_wrong_argument_type():
     m = MyStruct(3, b'hello', 0)
     with pytest.raises((ValueError, TypeError)):
         m.c = 3
+
+
+def test_optional_struct():
+    opt_type = xdrlib.Optional(MyStruct)
+    yes = opt_type(3, b'hello', 0)
+    no = opt_type()
+    assert isinstance(yes, opt_type)
+    assert isinstance(yes, MyStruct)
+    assert isinstance(no, opt_type)
+    assert isinstance(no, xdrlib.Void)
+    assert yes.a == 3
+    assert yes.b == b'hello'
+    assert yes.c == 0
+    py = b'\0\0\0\x01' b'\0\0\0\x03' b'\0\0\0\x05hello\0\0\0' b'\0\0\0\0'
+    pn = b'\0\0\0\0'
+    assert yes.encode() == py
+    assert no.encode() == pn
+    nyes = opt_type.decode(py)
+    assert nyes == yes
+    assert nyes.encode() == py
+    nno = opt_type.decode(pn)
+    assert nno == no
+    assert nno.encode() == pn
+
+
+def test_struct_with_optional_field():
+    m = xdrlib.Struct(a=xdrlib.Integer, b=xdrlib.Optional(xdrlib.Double), c=xdrlib.Boolean)
+    m1 = m(1, 3.14, True)
+    m2 = m(1, None, True)
+    assert isinstance(m1.b, xdrlib.Optional)
+    assert isinstance(m1.b, xdrlib.Double)
+    assert m1.b == 3.14
+    assert isinstance(m2.b, xdrlib.Optional)
+    assert isinstance(m2.b, xdrlib.Void)
+    assert m2.b == None
+    p1 = b'\0\0\0\x01' + b'\0\0\0\x01' + xdrlib.Double(3.14).encode() + b'\0\0\0\x01'
+    p2 = b'\0\0\0\x01' + b'\0\0\0\0' + b'\0\0\0\x01'
+    assert m1.encode() == p1
+    assert m2.encode() == p2
+    n1 = m.decode(p1)
+    n2 = m.decode(p2)
+    assert n1 == m1
+    assert n2 == m2
+    assert n1.encode() == p1
+    assert n2.encode() == p2
