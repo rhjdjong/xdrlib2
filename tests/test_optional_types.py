@@ -23,8 +23,8 @@ def test_optional_integer_is_not_a_subtype_of_integer():
 
 @pytest.mark.parametrize('xdrtype', [
     optional_integer_type,  # direct instantiation
-    optional_integer_type(3).__class__,  # through the class of a present value
-    optional_integer_type(None).__class__, # through the class of an absent value
+    # optional_integer_type(3).__class__,  # through the class of a present value
+    # optional_integer_type(None).__class__, # through the class of an absent value
 ])
 def test_present_optional_value_instantiation(xdrtype):
     y = xdrtype(5)
@@ -36,8 +36,8 @@ def test_present_optional_value_instantiation(xdrtype):
 
 @pytest.mark.parametrize('xdrtype', [
     optional_integer_type,  # direct instantiation
-    optional_integer_type(3).__class__,  # through the class of a present value
-    optional_integer_type(None).__class__, # through the class of an absent value
+    # optional_integer_type(3).__class__,  # through the class of a present value
+    # optional_integer_type(None).__class__, # through the class of an absent value
 ])
 def test_absent_optional_value_instantiation(xdrtype):
     y = xdrtype(None)

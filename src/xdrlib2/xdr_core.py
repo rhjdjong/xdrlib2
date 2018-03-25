@@ -4,6 +4,12 @@
 
 import inspect
 import re
+import enum
+
+
+XDR_UNIT_SIZE = 4
+XDR_BYTE_ORDER = 'big'
+
 
 reserved_names = (
     'bool',
@@ -26,44 +32,97 @@ reserved_names = (
     'void',
 )
 
-class _MetaXdrType(type):
-    def __init__(cls, name, bases, dct, **kwargs):
-        super().__init__(name, bases, dct, **kwargs)
-        # Execute class-specific initialization
-        cls._init_class(dct, **kwargs)
 
+def xdr_padded(bstr):
+    return bstr + xdr_padding(len(bstr))
+
+
+def xdr_padded_size(size):
+    return size + xdr_padding_size(size)
+
+
+def xdr_padding(size):
+    return b'\0' * xdr_padding_size(size)
+
+
+def xdr_padding_size(size):
+    return ((XDR_UNIT_SIZE - size % XDR_UNIT_SIZE) % XDR_UNIT_SIZE)
+
+
+def xdr_remove_padding(bstr, size):
+    padded_size = xdr_padded_size(size)
+    if len(bstr) < padded_size:
+        raise ValueError(f"byte sequence too short. "
+                         f"Expected {padded_size:d} bytes, "
+                         f"got {len(bstr):d} bytes.")
+    if any(b for b in bstr[size:padded_size]):
+        raise ValueError(f"non-zero padding byte(s) encountered: {bstr[size:padded_size]!s}'")
+    return bstr[:size], bstr[padded_size:]
+
+
+def xdr_is_valid_name(name):
+    if name in reserved_names:
+        return False
+    return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
+
+
+_xdr_mode = enum.Enum('_xdr_mode', 'ABSTRACT CONCRETE FINAL')
+
+
+class _MetaXdrType(type):
     # Concrete XDR types contain parameters that determine the
     # allowed values and operations.
     # To prevent inadvertent modifications of these parameters,
     # creating, modifying, or deleting these parameters is not allowed.
     def __setattr__(cls, name, value):
-        if cls._final:
+        if cls._mode is _xdr_mode.FINAL:
             raise AttributeError(f"cannot set attribute '{name:s}' to '{value}' for class '{cls.__name__:s}'")
         super().__setattr__(name, value)
 
     def __delattr__(cls, name):
-        if cls._final:
+        if cls._mode is _xdr_mode.FINAL:
             raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
         super().__delattr__(name)
 
+    # Concrete classes expose their parameters as class attributes.
+    # Some classes, e.g. structs and unions, also expose their members as class attributes.
+    # Name resolution is delegated to the class method '_getattr_' (single underscores).
     def __getattr__(cls, name):
-        return cls._getattr(name)
-        # if name in cls._names:
-        #     return cls._names[name]
-        # raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
-        #                      f"has no attribute '{name:s}'")
+        return cls._getattr_(name)
 
+    # Classes like structs and unions also expose their member types via indexing
+    # This operation is delegated to the class method '_getitem_' (single underscores)
     def __getitem__(cls, index):
-        return cls._get_item(index)
+        return cls._getitem_(index)
 
 
 class XdrType(metaclass=_MetaXdrType):
-    _final = False
-    _abstract = True
-    _parameters = ()
+    _mode = _xdr_mode.ABSTRACT
+    _parameters = ()    # Parameters used by an XDR factory class
+
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._mode is _xdr_mode.FINAL:
+            if parameters:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
+        else:
+            cls._init_concrete_subclass_(**parameters)
 
     @classmethod
-    def _init_class(cls, dct, **kwargs):
+    def _check_parameters_for_completeness(cls, parameters):
+        if cls._parameters:
+            extra_names = set(parameters.keys()) - set(cls._parameters)
+            if extra_names:
+                raise ValueError(f"{cls.__name__:s}' subclass got "
+                                 f"unexpected parameter(s) {tuple(extra_names)!s}")
+        missing_names = set(cls._parameters) - set(parameters.keys())
+        return tuple(missing_names)
+
+    @classmethod
+    def _init_abstract_subclass_(cls, **kwargs):
         pass
 
     @classmethod
@@ -77,29 +136,33 @@ class XdrType(metaclass=_MetaXdrType):
         raise NotImplementedError
 
     @classmethod
-    def _getattr(cls, name):
+    def _getattr_(cls, name):
         raise AttributeError(f"'{cls.__class__.__name__:s}' object '{cls.__name__:s}' has no attribute '{name:s}'")
 
-    @classmethod
-    def _get_item(cls, index):
-        raise NotImplementedError(f"class '{cls.__name__:s}' does not support indexing.")
+    def __getattr__(self, name):
+        return getattr(self.__class__, name)
 
     @classmethod
-    def _get_class_creation_information(cls, **kwargs):
-        if cls._final:
-            if kwargs:
-                # This is subclassing a concrete type with additional or modified parameters
-                raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
-            return {}  # Subclassing without modifications is OK
+    def _getitem_(cls, index):
+        raise TypeError(f"class '{cls.__name__:s}' is not subscriptable")
 
-        parameters = {n: v for n, v in vars(cls).items() if not n.startswith('_')}
+    @classmethod
+    def _get_class_parameters(cls, **kwargs):
+        """
+        This method obtains the parameters from the class body
+        (any attribute that does not start with an underscore)
+        and the kwargs parameter in the argument.
+        The parameters found in the class body are removed from the body,
+        to avoid conflicts with e.g. class properties with the same name.
+        """
+        parameters = {n: v for n, v in vars(cls).items()
+                      if not n.startswith('_') and not callable(v)
+                      and not inspect.isroutine(v)
+                      and not inspect.isdatadescriptor(v)}
         for n in kwargs:
             if n in parameters:
                 raise ValueError(f"class '{cls.__name__:s}' got duplicate class parameter '{n:s}'")
         parameters.update(kwargs)
-
-        if cls._final and parameters:
-            raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
 
         for n in parameters:
             if n in vars(cls):
@@ -128,9 +191,8 @@ class XdrType(metaclass=_MetaXdrType):
 
 
     @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        raise NotImplementedError(f"concrete subclass '{cls.__name__:s}'"
-                                  f"must override class method '_init_concrete_subclass'")
+    def _init_concrete_subclass_(cls, **kwargs):
+        pass
 
     @classmethod
     def decode(cls, bstr):
@@ -145,21 +207,20 @@ class XdrType(metaclass=_MetaXdrType):
             return False
         return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
 
-
-    @staticmethod
-    def padding(size):
-        return b'\0' * ((4 - size % 4) % 4)
-
-    @staticmethod
-    def padded_size(size):
-        return size + ((4 - size % 4) % 4)
-
-    @staticmethod
-    def remove_padding(bstr, size):
-        if any(b for b in bstr[size:]):
-            raise ValueError("non-zero padding byte(s) encountered: '{bstr[size:].encode('utf8'):s}'")
-        return bstr[:size]
-
+    # def pad(self, bstr):
+    #     return bstr + self.padding(len(bstr))
+    #
+    # def padding(self, size):
+    #     return b'\0' * ((4 - size % 4) % 4)
+    #
+    # def padded_size(self, size):
+    #     return size + len(self.padding(size))
+    #
+    # def remove_padding(self, bstr, size):
+    #     if any(b for b in bstr[size:]):
+    #         raise ValueError("non-zero padding byte(s) encountered: '{bstr[size:].encode('utf8'):s}'")
+    #     return bstr[:size]
+    #
     @classmethod
     def typedef(cls, _xdr_type_name=None, *bases, **kwargs):
         type_name = _xdr_type_name if _xdr_type_name else cls.__name__
@@ -168,32 +229,41 @@ class XdrType(metaclass=_MetaXdrType):
 
 
 class XdrAtomic(XdrType):
+    _mode = _xdr_mode.ABSTRACT
+
     _packed_size = None
 
-    def __new__(cls, *args, **kwargs):
-        if cls._abstract:
-            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-        return super().__new__(cls, *args, **kwargs)
+    # def __new__(cls, *args, **kwargs):
+    #     if cls._mode is _xdr_mode.ABSTRACT:
+    #         raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
+    #     return super().__new__(cls, *args, **kwargs)
+
+    @classmethod
+    def _getattr_(cls, name):
+        if name == 'packed_size':
+            return cls._packed_size
+        return super()._getattr_(name)
 
     @classmethod
     def _validate_arguments(cls, *args, **kwargs):
         pass  # Validation is best done during instance creation.
 
-    @classmethod
-    def packed_size(cls):
-        return cls._packed_size
+    # @classmethod
+    # def packed_size(cls):
+    #     return cls._packed_size
 
 
 class Void(XdrType):
-    _final = True
-    _abstract = False
+    _mode = _xdr_mode.FINAL
+    # _final = True
+    # _abstract = False
 
     def __new__(cls, _=None):
         return super().__new__(cls)
 
-    @classmethod
-    def _validate_arguments(cls):
-        pass
+    # @classmethod
+    # def _validate_arguments(cls):
+    #     pass
 
     def encode(self):
         return b''

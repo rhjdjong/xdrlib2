@@ -94,7 +94,7 @@ class Union(XdrType):
     _abstract = True
 
     def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_creation_information(**kwargs)
+        parameters = cls._get_class_parameters(**kwargs)
         if cls._final or issubclass(cls, Optional):
             if parameters:
                 raise TypeError("cannot subclass union type with modifications.")

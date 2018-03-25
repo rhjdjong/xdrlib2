@@ -7,7 +7,7 @@ from .xdr_core import XdrType
 class Struct(XdrType):
 
     def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_creation_information(**kwargs)
+        parameters = cls._get_class_parameters(**kwargs)
         if cls._final:
             if parameters:
                 raise TypeError(f"cannot extend struct class '{cls.__name__:s}' "

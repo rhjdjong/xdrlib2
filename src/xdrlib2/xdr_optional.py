@@ -4,7 +4,7 @@
 
 import inspect
 
-from .xdr_core import XdrType, Void
+from .xdr_core import XdrType, Void, _xdr_mode
 from .xdr_enumeration import Boolean, FALSE, TRUE
 
 class Optional(XdrType):
@@ -71,9 +71,68 @@ class Optional(XdrType):
     >>> type(y).__bases__ == (opt_cls, Void)
     True
     """
+    _mode = _xdr_mode.ABSTRACT
+    # _final = False
+    # _abstract = True
+    _class_for_instances = []
+    _parameters = ('optional',)
 
-    _final = False
+    @classmethod
+    def _init_abstract_subclass_(cls, **kwargs):
+        if not kwargs:
+            raise ValueError(f"concrete class required for creating a '{cls.__name__:s}' optional type")
+        try:
+            wrapped_class = kwargs.pop('optional')
+        except KeyError:
+            raise TypeError(f"missing class parameters 'optional' "
+                            f"for class '{cls.__name__:s}'")
+        if kwargs:
+            raise ValueError(f"unexpected parameters {kwargs!s} for '{cls.__name__:s}' optional type.")
+        cls._mode = _xdr_mode.CONCRETE
+        absent_class = cls.typedef(None, Void, optional=Void)
+        present_class = cls.typedef(None, wrapped_class, optional=wrapped_class)
+        cls._class_for_instances = [absent_class, present_class]
+        cls._mode = _xdr_mode.FINAL
 
+    @classmethod
+    def _init_concrete_subclass_(cls, **kwargs):
+        if not kwargs:
+            raise ValueError(f"concrete class required for creating a '{cls.__name__:s}' optional type")
+        try:
+            wrapped_class = kwargs.pop('optional')
+        except KeyError:
+            raise TypeError(f"missing class parameters 'optional' "
+                            f"for class '{cls.__name__:s}'")
+        if kwargs:
+            raise ValueError(f"unexpected parameters {kwargs!s} for '{cls.__name__:s}' optional type.")
+
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._final:
+            if parameters:
+                raise TypeError(f"cannot subclass optional type '{cls.__name__:s}' with modifications.")
+        elif cls._abstract:
+            # This is the optional base class, the parent of the 'present' and 'absent' classes
+            # It requires one parameter, the class that is being made optional,
+            if not parameters:
+                raise ValueError(f"concrete class required for creating a '{cls.__name__:s}' optional type")
+            if len(parameters) > 1:
+                raise ValueError(f"unexpected parameters {parameters!s} for '{cls.__name__:s}' optional type.")
+            extra_names = set(parameters.keys()) - set(cls._parameters)
+            if extra_names:
+                raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
+            wrapped_class = parameters['optional']
+            cls._abstract = False
+            absent_class = cls.typedef(None, Void, optional=Void)
+            present_class = cls.typedef(None, wrapped_class, optional=wrapped_class)
+            cls._class_for_instances = [absent_class, present_class]
+            cls._instanceclass = False # So that __new__ can figure out what is being instantiated.
+        else:
+            # This is a subclass for the 'present' or 'absent' casee.
+            cls._instanceclass = True
+            cls._optional_class = parameters['optional']
+        cls._final = True
+        # cls._final = True
     # def __init_subclass__(cls, **kwargs):
     #     bases = cls.__bases__
     #     for index, base in enumerate(bases):
@@ -95,41 +154,47 @@ class Optional(XdrType):
         # creates and returns a new, optional XDR class.
         # In all other cases it is the instantiation of an already
         # existing optional class.
-        if not cls._final:
-            # class is called to wrap an existing class.
+        if cls._abstract:
+        # if cls._class_for_instances:
+            # No classes for absent or present are defined yet.
+            # This class is called to wrap an existing class.
             if kwargs or len(args) != 1 or not inspect.isclass(args[0]) or not issubclass(args[0], XdrType):
                 raise TypeError(f"cannot apply Optional class wrapper to {args!s}, {kwargs!s}")
             wrapped_class = args[0]
-            if wrapped_class._abstract:
-                raise TypeError(f"cannot apply Optional class wrapper to "
-                                f"abstract XDR class '{wrapped_class.__name__:s}'")
-            optional_class = cls._make_optional_class(wrapped_class)
+            # if wrapped_class._abstract:
+            #     raise TypeError(f"cannot apply Optional class wrapper to "
+            #                     f"abstract XDR class '{wrapped_class.__name__:s}'")
+            optional_class = cls.typedef('*' + wrapped_class.__name__, optional=wrapped_class)
+
+            # optional_class._class_for_instances[TRUE] = optional_class.typedef(None, wrapped_class)
+            # optional_class._class_when_absent = optional_class.typedef(None, Void)
+            # optional_class = cls._make_optional_class(wrapped_class)
+            # optional_class._final = True
             return optional_class
 
-        if cls._is_instantiated_as_absent(*args, **kwargs):
-            return Void.__new__(cls._absent_class)
+        if cls._instanceclass:
+            return cls._optional_class.__new__(cls, *args, **kwargs)
         else:
-            return cls._original_class.__new__(cls._present_class, *args, **kwargs)
+            instance_class = cls._class_for_instances[cls._is_instantiated_as_present(*args, **kwargs)]
+            return instance_class.__new__(instance_class, *args, **kwargs)
 
     def encode(self):
-        if isinstance(self, Void):
-            return FALSE.encode()
-        else:
-            return TRUE.encode() + super().encode()
+        return (FALSE if isinstance(self, Void) else TRUE).encode() + super().encode()
+        # if isinstance(self, Void):
+        #     return FALSE.encode()
+        # else:
+        #     return TRUE.encode() + super().encode()
 
     @classmethod
     def parse(cls, source):
         present, source = Boolean.parse(source)
-        if present:
-            obj, source = cls._original_class.parse(source)
-            obj.__class__ = cls._present_class
-        else:
-            obj = cls._absent_class()
-        return obj, source
+        instance_class = cls._class_for_instances[present]
+        obj, source = instance_class._optional_class.parse(source)
+        return cls(obj), source
 
     @staticmethod
-    def _is_instantiated_as_absent(*args, **kwargs):
-        return args in ((), (None,)) and not kwargs
+    def _is_instantiated_as_present(*args, **kwargs):
+        return not (args in ((), (None,)) and not kwargs)
 
     @classmethod
     def _make_optional_class(cls, original_class):
@@ -155,13 +220,13 @@ class Optional(XdrType):
         present_class = cls.typedef(cls.__name__, original_class)
         cls._present_class = present_class
 
-    @classmethod
-    def _get_item(cls, name):
-        return cls._original_class._get_item(name)
-
-    @classmethod
-    def _getattr(cls, name):
-        return cls._original_class._getattr(name)
+    # @classmethod
+    # def _get_item(cls, name):
+    #     return cls._original_class._get_item(name)
+    #
+    # @classmethod
+    # def _getattr(cls, name):
+    #     return cls._original_class._getattr(name)
 
     # def __eq__(self, other):
     #     return super().__eq__(other)

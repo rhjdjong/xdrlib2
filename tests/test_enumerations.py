@@ -151,45 +151,45 @@ def test_anonymous_enumeration():
     assert anon.decode(b'\0\0\0\x04') == anon.YY
 
 
-def test_optional_enumeration():
-    OptColor = xdrlib.Optional(Colors)
-    n = OptColor()
-    assert isinstance(n, OptColor)
-    assert isinstance(n, xdrlib.Void)
-    assert n == None
-    pn = b'\0\0\0\0'
-    assert n.encode() == pn
-    n1 =  OptColor.decode(pn)
-    assert n1 == n
-    assert n1.encode() == pn
-
-    r = OptColor(2)
-    assert isinstance(r, OptColor)
-    assert isinstance(r, Colors)
-    assert r == Colors.RED
-    pr = b'\0\0\0\x01' b'\0\0\0\x02'
-    assert r.encode() == pr
-    r1 = OptColor.decode(pr)
-    assert r1 == r
-    assert r1.encode() == pr
-
-    y = OptColor('YELLOW')
-    assert isinstance(y, OptColor)
-    assert isinstance(y, Colors)
-    assert y == Colors.YELLOW
-    py = b'\0\0\0\x01' b'\0\0\0\x03'
-    assert y.encode() == py
-    y1 = OptColor.decode(py)
-    assert y1 == y
-    assert y1.encode() == py
-
-    b = OptColor(Colors.BLUE)
-    assert isinstance(b, OptColor)
-    assert isinstance(b, Colors)
-    assert b == Colors.BLUE
-    pb = b'\0\0\0\x01' b'\0\0\0\x05'
-    assert b.encode() == pb
-    b1 = OptColor.decode(pb)
-    assert b1 == b
-    assert b1.encode() == pb
+# def test_optional_enumeration():
+#     OptColor = xdrlib.Optional(Colors)
+#     n = OptColor()
+#     assert isinstance(n, OptColor)
+#     assert isinstance(n, xdrlib.Void)
+#     assert n == None
+#     pn = b'\0\0\0\0'
+#     assert n.encode() == pn
+#     n1 =  OptColor.decode(pn)
+#     assert n1 == n
+#     assert n1.encode() == pn
+#
+#     r = OptColor(2)
+#     assert isinstance(r, OptColor)
+#     assert isinstance(r, Colors)
+#     assert r == Colors.RED
+#     pr = b'\0\0\0\x01' b'\0\0\0\x02'
+#     assert r.encode() == pr
+#     r1 = OptColor.decode(pr)
+#     assert r1 == r
+#     assert r1.encode() == pr
+#
+#     y = OptColor('YELLOW')
+#     assert isinstance(y, OptColor)
+#     assert isinstance(y, Colors)
+#     assert y == Colors.YELLOW
+#     py = b'\0\0\0\x01' b'\0\0\0\x03'
+#     assert y.encode() == py
+#     y1 = OptColor.decode(py)
+#     assert y1 == y
+#     assert y1.encode() == py
+#
+#     b = OptColor(Colors.BLUE)
+#     assert isinstance(b, OptColor)
+#     assert isinstance(b, Colors)
+#     assert b == Colors.BLUE
+#     pb = b'\0\0\0\x01' b'\0\0\0\x05'
+#     assert b.encode() == pb
+#     b1 = OptColor.decode(pb)
+#     assert b1 == b
+#     assert b1.encode() == pb
 

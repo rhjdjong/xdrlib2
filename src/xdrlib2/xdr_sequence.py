@@ -124,7 +124,7 @@ class XdrOpaque(XdrSequence, bytearray):
     _opaque_parameters = {n: None for n in _parameters}
 
     def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_creation_information(**kwargs)
+        parameters = cls._get_class_parameters(**kwargs)
         if cls._final:
             if parameters:
                 raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
@@ -216,7 +216,7 @@ class XdrArray(XdrSequence, list):
     _array_parameters = {n: None for n in _parameters}
 
     def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_creation_information(**kwargs)
+        parameters = cls._get_class_parameters(**kwargs)
         if cls._final:
             if parameters:
                 raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
