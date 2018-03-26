@@ -206,6 +206,8 @@ class Optional(XdrType):
         # else:
         is_present = cls._is_instantiated_as_present(*args, **kwargs)
         instance_class = cls._class_for_instances[is_present]
+        # if is_present and not kwargs and len(args) == 1 and isinstance(args[0], instance_class._wrapped_class):
+        #     return args[0]
         instance = instance_class._wrapped_class.__new__(instance_class, *args, **kwargs)
         return instance
 

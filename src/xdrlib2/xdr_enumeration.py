@@ -54,16 +54,21 @@ class Enumeration(Integer):
 
             if isinstance(arg, str):
                 try:
-                    return super().__new__(cls, cls._enum_value_by_name[arg])
+                    instance = super().__new__(cls, cls._enum_value_by_name[arg])
                 except KeyError:
                     raise ValueError("invalid enumeration name '{value:s}' "
                                      "for enumeration '{cls.__name__:s}'") from None
+                instance.name = arg
+                return instance
+
             if isinstance(arg, numbers.Integral):
                 try:
-                    return super().__new__(cls, cls._enum_value_by_value[arg])
+                    instance = super().__new__(cls, cls._enum_value_by_value[arg])
                 except KeyError:
                     raise ValueError("invalid enumeration name '{value:s}' "
                                      "for enumeration '{cls.__name__:s}'") from None
+                instance.name = list(n for n, v in cls._enum_value_by_name.items() if v == arg)[0]
+                return instance
 
             raise ValueError(f"invalid value {value!r} for enumeration '{cls.__name__:s}'") from None
 
@@ -75,7 +80,7 @@ class Enumeration(Integer):
             return super()._getattr_(name)
 
     def __repr__(self):
-        return f"{self.__class__.__name__:s}.{self.__name__:s}({super().__str__():s})"
+        return f"{self.__class__.__name__:s}.{self.name:s}({super().__str__():s})"
 
     def __str__(self):
         return f"{self.name:s}({super().__str__():s})"

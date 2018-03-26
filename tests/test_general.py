@@ -2,6 +2,8 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
+import pytest
+import xdrlib2
 import sys
 
 

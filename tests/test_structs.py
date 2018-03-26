@@ -119,3 +119,27 @@ def test_struct_with_optional_field():
     assert n2 == m2
     assert n1.encode() == p1
     assert n2.encode() == p2
+
+
+def test_struct_with_self_reference():
+    with xdrlib.Struct() as SelfRefStruct:
+        SelfRefStruct.x = xdrlib.Integer
+        SelfRefStruct.link = xdrlib.Optional(SelfRefStruct)
+    a = SelfRefStruct(x=3, link=None)
+    b = SelfRefStruct(x=4, link=a)
+    c = SelfRefStruct(x=5, link=b)
+    pa = xdrlib.Integer(3).encode()
+    pb = xdrlib.Integer(4).encode() + xdrlib.TRUE.encode() + pa
+    pc = xdrlib.Integer(5).encode() + xdrlib.TRUE.encode() + pb
+    assert a.encode() == pa
+    assert b.encode() == pb
+    assert c.encode() == pc
+    na = SelfRefStruct.decode(pa)
+    nb = SelfRefStruct.decode(pb)
+    nc = SelfRefStruct.decode(pc)
+    assert na == a
+    assert nb == b
+    assert nc == c
+    assert na.encode() == pa
+    assert nb.encode() == pb
+    assert nc.encode() == pc

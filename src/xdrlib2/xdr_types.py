@@ -7,7 +7,7 @@ from .xdr_integer import Integer, UnsignedInteger, Hyper, UnsignedHyper
 from .xdr_enumeration import Enumeration, Boolean, FALSE, TRUE
 from .xdr_float import Float, Double, Quadruple
 from .xdr_sequence import FixedOpaque, VarOpaque, String, FixedArray, VarArray
-# from .xdr_struct import Struct
+from .xdr_struct import Struct
 from .xdr_optional import Optional
 # from .xdr_union import Union
 
@@ -29,7 +29,7 @@ __all__ = [
     'String',
     'FixedArray',
     'VarArray',
-    # 'Struct',
+    'Struct',
     'Optional',
     # 'Union',
 ]

@@ -2,6 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
+import numbers
 import inspect
 import re
 import enum
@@ -158,9 +159,9 @@ class XdrType(metaclass=_MetaXdrType):
         cls_vars = vars(cls).copy()
         parameters = {}
         for name, value in cls_vars.items():
-            if name in cls._parameters or (not name.startswith('_') and not callable(value)
-                                           and not inspect.isroutine(value)
-                                           and not inspect.isdatadescriptor(value)):
+            if name in cls._parameters or (not name.startswith('_') and (
+                    isinstance(value, (numbers.Number, str)) or
+                    (inspect.isclass(value) and issubclass(value, XdrType)))):
                 parameters[name] = value
                 delattr(cls, name)
         for name in kwargs:
