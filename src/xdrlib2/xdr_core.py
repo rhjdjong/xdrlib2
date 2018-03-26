@@ -100,17 +100,17 @@ class XdrType(metaclass=_MetaXdrType):
     _mode = _xdr_mode.ABSTRACT
     _parameters = ()    # Parameters used by an XDR factory class
 
-    def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_parameters(**kwargs)
-        if cls._mode is _xdr_mode.FINAL:
-            if parameters:
-                raise TypeError(f"cannot subclass final type "
-                                f"'{cls.__name__:s}' with modifications.")
-        if cls._mode is _xdr_mode.ABSTRACT:
-            cls._init_abstract_subclass_(**parameters)
-        else:
-            cls._init_concrete_subclass_(**parameters)
-
+    # def __init_subclass__(cls, **kwargs):
+    #     parameters = cls._get_class_parameters(**kwargs)
+    #     if cls._mode is _xdr_mode.FINAL:
+    #         if parameters:
+    #             raise TypeError(f"cannot subclass final type "
+    #                             f"'{cls.__name__:s}' with modifications.")
+    #     if cls._mode is _xdr_mode.ABSTRACT:
+    #         cls._init_abstract_subclass_(**parameters)
+    #     else:
+    #         cls._init_concrete_subclass_(**parameters)
+    #
     @classmethod
     def _check_parameters_for_completeness(cls, parameters):
         if cls._parameters:
@@ -155,18 +155,18 @@ class XdrType(metaclass=_MetaXdrType):
         The parameters found in the class body are removed from the body,
         to avoid conflicts with e.g. class properties with the same name.
         """
-        parameters = {n: v for n, v in vars(cls).items()
-                      if not n.startswith('_') and not callable(v)
-                      and not inspect.isroutine(v)
-                      and not inspect.isdatadescriptor(v)}
-        for n in kwargs:
-            if n in parameters:
-                raise ValueError(f"class '{cls.__name__:s}' got duplicate class parameter '{n:s}'")
+        cls_vars = vars(cls).copy()
+        parameters = {}
+        for name, value in cls_vars.items():
+            if name in cls._parameters or (not name.startswith('_') and not callable(value)
+                                           and not inspect.isroutine(value)
+                                           and not inspect.isdatadescriptor(value)):
+                parameters[name] = value
+                delattr(cls, name)
+        for name in kwargs:
+            if name in parameters:
+                raise ValueError(f"class '{cls.__name__:s}' got duplicate class parameter '{name:s}'")
         parameters.update(kwargs)
-
-        for n in parameters:
-            if n in vars(cls):
-                delattr(cls, n)
         return parameters
 
     @classmethod
@@ -257,6 +257,13 @@ class Void(XdrType):
     _mode = _xdr_mode.FINAL
     # _final = True
     # _abstract = False
+
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._mode is _xdr_mode.FINAL:
+            if parameters:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
 
     def __new__(cls, _=None):
         return super().__new__(cls)

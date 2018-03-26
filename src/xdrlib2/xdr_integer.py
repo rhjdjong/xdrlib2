@@ -16,6 +16,17 @@ class XdrInteger(XdrAtomic, int):
     _parameters = ('min', 'max')
     _integer_parameters = {}
 
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._mode is _xdr_mode.FINAL:
+            if parameters:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
+        else:
+            cls._init_concrete_subclass_(**parameters)
+
     @classmethod
     def _init_abstract_subclass_(cls, **kwargs):
         if kwargs:

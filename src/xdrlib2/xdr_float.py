@@ -22,6 +22,17 @@ class XdrFloat(XdrAtomic, float):
     _nstr_exponentfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)(?:\.(?P<decpart>\d*))[Ee](?P<exp>[+-]?\d+)$')
     _hex_str_re = re.compile(r'^(?:0x)?(?P<intpart>[0-9a-f]+)(?:\.(?P<fraction>[0-9a-f]+))?(?:p(?P<exp>[+-]?\d+))?$')
 
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._mode is _xdr_mode.FINAL:
+            if parameters:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
+        else:
+            cls._init_concrete_subclass_(**parameters)
+
     @classmethod
     def _init_abstract_subclass_(cls, **kwargs):
         if kwargs:

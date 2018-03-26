@@ -11,6 +11,17 @@ class Enumeration(Integer):
     _mode = _xdr_mode.ABSTRACT
     _parameters = ()
 
+    def __init_subclass__(cls, **kwargs):
+        parameters = cls._get_class_parameters(**kwargs)
+        if cls._mode is _xdr_mode.FINAL:
+            if parameters:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
+        else:
+            cls._init_concrete_subclass_(**parameters)
+
     @classmethod
     def _init_abstract_subclass_(cls, **kwargs):
         if kwargs:
@@ -43,13 +54,13 @@ class Enumeration(Integer):
 
             if isinstance(arg, str):
                 try:
-                    return cls._enum_value_by_name[arg]
+                    return super().__new__(cls, cls._enum_value_by_name[arg])
                 except KeyError:
                     raise ValueError("invalid enumeration name '{value:s}' "
                                      "for enumeration '{cls.__name__:s}'") from None
             if isinstance(arg, numbers.Integral):
                 try:
-                    return cls._enum_value_by_value[arg]
+                    return super().__new__(cls, cls._enum_value_by_value[arg])
                 except KeyError:
                     raise ValueError("invalid enumeration name '{value:s}' "
                                      "for enumeration '{cls.__name__:s}'") from None

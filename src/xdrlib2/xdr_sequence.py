@@ -4,12 +4,14 @@
 
 import numbers
 
-from .xdr_core import XdrType
+from .xdr_core import XdrType, _xdr_mode, xdr_remove_padding, xdr_padded
 from .xdr_integer import UnsignedInteger
 
 
 class XdrSequence(XdrType):
-
+    _mode = _xdr_mode.ABSTRACT
+    _parameters = ()
+    _sequence_parameters = {}
     # def __new__(cls, *args, **kwargs):
     #     if cls._abstract:  # Anonymous subclass creation
     #         return cls._create_anonymous_subclass(*args, **kwargs)
@@ -17,9 +19,48 @@ class XdrSequence(XdrType):
     #         return cls._create_concrete_instance(*args, **kwargs)
 
 
+    # @classmethod
+    # def _init_concrete_subclass(cls, **kwargs):
+    #     return True, kwargs
+    #
     @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        return True, kwargs
+    def _init_abstract_subclass_(cls, **kwargs):
+        if kwargs:
+            existing_sequence_parameters = cls._sequence_parameters
+            cls._sequence_parameters = {}
+            cls._sequence_parameters.update(existing_sequence_parameters)
+            for name in cls._parameters:
+                if name in kwargs:
+                    if name in cls._sequence_parameters:
+                        raise TypeError(f"class '{cls.__name__:s}': redefinition of "
+                                        f"class parameter '{name:s}' to {kwargs[name]!s}")
+                    cls._sequence_parameters[name] = kwargs.pop(name)
+            if kwargs:
+                raise TypeError(f"unexpected class parameter(s) {kwargs!s} for class '{cls.__name__:s}'")
+            missing_parameters = set(cls._parameters) - set(cls._sequence_parameters.keys())
+            if missing_parameters:
+                return  # Incomplete class definition
+
+            if cls.variable:
+                minsize = 0
+            else:
+                minsize = cls.size
+            cls._sequence_parameters['minsize'] = minsize
+            cls._mode = _xdr_mode.FINAL
+
+    @classmethod
+    def _getattr_(cls, name):
+        try:
+            return cls._sequence_parameters[name]
+        except KeyError:
+            return super()._getattr_(name)
+
+    def __getattr__(self, name):
+        try:
+            return getattr(self.__class__, name)
+        except KeyError:
+            raise AttributeError(f"'{self.__class__.__name__:s}' object "
+                                 f"has no attribute '{name:s}'") from None
 
     @classmethod
     def _verify_size(cls, size):
@@ -121,67 +162,28 @@ class XdrSequence(XdrType):
 
 class XdrOpaque(XdrSequence, bytearray):
     _parameters = ('variable', 'size')
-    _opaque_parameters = {n: None for n in _parameters}
 
     def __init_subclass__(cls, **kwargs):
         parameters = cls._get_class_parameters(**kwargs)
-        if cls._final:
+        if cls._mode is _xdr_mode.FINAL:
             if parameters:
-                raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
-                                f"with additional enumeration values {parameters!s}")
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
         else:
-            extra_names = set(parameters.keys()) - set(cls._parameters)
-            if extra_names:
-                raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
-            if cls._abstract:
-                cls._opaque_parameters = cls._opaque_parameters.copy()
-                for name, value in parameters.items():
-                    cls._opaque_parameters[name] = value
-                    if name == 'size':
-                        if cls.variable:
-                            minsize = 0
-                        else:
-                            minsize = value
-                        cls._opaque_parameters['minsize'] = minsize
-                for name in cls._parameters:
-                    if getattr(cls, name) is None:
-                        break
-                else:
-                    # Complete subclass
-                    cls._abstract = False
-                    cls._final = True
-
-    @classmethod
-    def _getattr(cls, name):
-        try:
-            return cls._opaque_parameters[name]
-        except KeyError:
-            raise AttributeError(f"class '{cls.__name__:s}' "
-                                 f"has no attribute '{name:s}'") from None
+            cls._init_concrete_subclass_(**parameters)
 
 
-    def __getattr__(self, name):
-        try:
-            return self.__class__._opaque_parameters[name]
-        except KeyError:
-            raise AttributeError(f"'{self.__class__.__name__:s}' object "
-                                 f"has no attribute '{name:s}'") from None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._abstract:  # Anonymous subclass creation
-            return cls._create_anonymous_subclass(*args, **kwargs)
+    def __new__(cls, value=None, **kwargs):
+        if cls._mode is _xdr_mode.ABSTRACT:  # Anonymous subclass creation
+            if value is not None:
+                raise NotImplementedError(f"Cannot instantiate abstract class {cls.__name__:s}'")
+            return cls.typedef(**kwargs)
         else:  # Concrete class instantiation
-            return cls._create_concrete_instance(*args, **kwargs)
-    # def __new__(cls, value=None):
-    #     if not cls._final:
-    #         raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-    #     return super().__new__(cls, cls.minsize if value is None else value)
-
-    @classmethod
-    def _create_concrete_instance(cls, value=None, **kwargs):
-        if value is None:
-            value = bytes(cls.minsize)
-        return super().__new__(cls, value, **kwargs)
+            if value is None:
+                value = bytes(cls.minsize)
+            return super().__new__(cls, value, **kwargs)
 
     def __init__(self, value=None, **kwargs):
         if value is None:
@@ -202,13 +204,13 @@ class XdrOpaque(XdrSequence, bytearray):
         raise ValueError(f"invalid slice {value!r} for object type '{self.__class__.__name__:s}'")
 
     def encode_items(self):
-        return self + self.padding(len(self))
+        return xdr_padded(self)
 
     @classmethod
     def parse_items(cls, bstr, size):
-        padded_size = cls.padded_size(size)
-        data = cls.remove_padding(bstr[:padded_size], size)
-        return cls(data), bstr[padded_size:]
+        # padded_size = cls.padded_size(size)
+        data, bstr = xdr_remove_padding(bstr, size)
+        return cls(data), bstr
 
 
 class XdrArray(XdrSequence, list):
@@ -217,60 +219,81 @@ class XdrArray(XdrSequence, list):
 
     def __init_subclass__(cls, **kwargs):
         parameters = cls._get_class_parameters(**kwargs)
-        if cls._final:
+        if cls._mode is _xdr_mode.FINAL:
             if parameters:
-                raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
-                                f"with additional enumeration values {parameters!s}")
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        if cls._mode is _xdr_mode.ABSTRACT:
+            cls._init_abstract_subclass_(**parameters)
         else:
-            extra_names = set(parameters.keys()) - set(cls._parameters)
-            if extra_names:
-                raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
-            if cls._abstract:
-                cls._array_parameters = cls._array_parameters.copy()
-                for name, value in parameters.items():
-                    cls._array_parameters[name] = value
-                    if name == 'size':
-                        if cls.variable:
-                            minsize = 0
-                        else:
-                            minsize = value
-                        cls._array_parameters['minsize'] = minsize
-                for name in cls._parameters:
-                    if getattr(cls, name) is None:
-                        break
-                else:
-                    # Complete subclass
-                    cls._abstract = False
-                    cls._final = True
+            cls._init_concrete_subclass_(**parameters)
 
-    @classmethod
-    def _getattr(cls, name):
-        try:
-            return cls._array_parameters[name]
-        except KeyError:
-            raise AttributeError(f"class '{cls.__name__:s}' "
-                                 f"has no attribute '{name:s}'") from None
+    # def __init_subclass__(cls, **kwargs):
+    #     parameters = cls._get_class_parameters(**kwargs)
+    #     if cls._final:
+    #         if parameters:
+    #             raise TypeError(f"Cannot extend enumeration class '{cls.__name__:s}' "
+    #                             f"with additional enumeration values {parameters!s}")
+    #     else:
+    #         extra_names = set(parameters.keys()) - set(cls._parameters)
+    #         if extra_names:
+    #             raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
+    #         if cls._abstract:
+    #             cls._array_parameters = cls._array_parameters.copy()
+    #             for name, value in parameters.items():
+    #                 cls._array_parameters[name] = value
+    #                 if name == 'size':
+    #                     if cls.variable:
+    #                         minsize = 0
+    #                     else:
+    #                         minsize = value
+    #                     cls._array_parameters['minsize'] = minsize
+    #             for name in cls._parameters:
+    #                 if getattr(cls, name) is None:
+    #                     break
+    #             else:
+    #                 # Complete subclass
+    #                 cls._abstract = False
+    #                 cls._final = True
 
+    # @classmethod
+    # def _getattr_(cls, name):
+    #     try:
+    #         return cls._array_parameters[name]
+    #     except KeyError:
+    #         raise AttributeError(f"class '{cls.__name__:s}' "
+    #                              f"has no attribute '{name:s}'") from None
+    #
 
-    def __getattr__(self, name):
-        try:
-            return self.__class__._array_parameters[name]
-        except KeyError:
-            raise AttributeError(f"'{self.__class__.__name__:s}' object "
-                                 f"has no attribute '{name:s}'") from None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._abstract:  # Anonymous subclass creation
-            return cls._create_anonymous_subclass(*args, **kwargs)
+    # def __getattr__(self, name):
+    #     try:
+    #         return self.__class__._array_parameters[name]
+    #     except KeyError:
+    #         raise AttributeError(f"'{self.__class__.__name__:s}' object "
+    #                              f"has no attribute '{name:s}'") from None
+    #
+    def __new__(cls, value=None, **kwargs):
+        if cls._mode is _xdr_mode.ABSTRACT:  # Anonymous subclass creation
+            if value is not None:
+                raise NotImplementedError(f"Cannot instantiate abstract class {cls.__name__:s}'")
+            return cls.typedef(**kwargs)
         else:  # Concrete class instantiation
-            return cls._create_concrete_instance(*args, **kwargs)
+            if value is None:
+                value = [cls.type()] * cls.minsize
+            return super().__new__(cls, value, **kwargs)
 
-    @classmethod
-    def _create_concrete_instance(cls, value=None, **kwargs):
-        if value is None:
-            value = [cls.type()] * cls.minsize
-        return super().__new__(cls, value, **kwargs)
-
+    # def __new__(cls, *args, **kwargs):
+    #     if cls._abstract:  # Anonymous subclass creation
+    #         return cls._create_anonymous_subclass(*args, **kwargs)
+    #     else:  # Concrete class instantiation
+    #         return cls._create_concrete_instance(*args, **kwargs)
+    #
+    # @classmethod
+    # def _create_concrete_instance(cls, value=None, **kwargs):
+    #     if value is None:
+    #         value = [cls.type()] * cls.minsize
+    #     return super().__new__(cls, value, **kwargs)
+    #
     def __init__(self, value=None, **kwargs):
         if value is None:
             lst = [self.type()] * self.minsize

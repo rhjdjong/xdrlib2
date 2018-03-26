@@ -48,9 +48,27 @@ def test_absent_optional_value_instantiation(xdrtype):
     assert isinstance(y, xdrlib.Optional)
 
 
-def test_optional_decorator_is_idempotent():
+def test_optional_type_can_be_made_optional():
     new_optional_type = xdrlib.Optional(optional_integer_type)
-    assert new_optional_type is optional_integer_type
+    x = new_optional_type(3)
+    y = new_optional_type()
+    assert isinstance(x, xdrlib.Integer)
+    assert isinstance(x, optional_integer_type)
+    assert isinstance(x, new_optional_type)
+    assert isinstance(y, xdrlib.Void)
+    assert isinstance(y, optional_integer_type)
+    assert isinstance(y, new_optional_type)
+    px = xdrlib.TRUE.encode() + xdrlib.TRUE.encode() + xdrlib.Integer(3).encode()
+    py = xdrlib.FALSE.encode()
+    assert x.encode() == px
+    assert y.encode() == py
+    nx = new_optional_type.decode(px)
+    ny = new_optional_type.decode(py)
+    assert nx == x
+    assert ny == y
+    assert nx.encode() == px
+    assert ny.encode() == py
+
 
 
 def test_void_cannot_be_made_optional():
