@@ -9,7 +9,7 @@ from .xdr_float import Float, Double, Quadruple
 from .xdr_sequence import FixedOpaque, VarOpaque, String, FixedArray, VarArray
 from .xdr_struct import Struct
 from .xdr_optional import Optional
-# from .xdr_union import Union
+from .xdr_union import Union
 
 __all__ = [
     'Void',
@@ -31,5 +31,5 @@ __all__ = [
     'VarArray',
     'Struct',
     'Optional',
-    # 'Union',
+    'Union',
 ]

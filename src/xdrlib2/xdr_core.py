@@ -6,7 +6,7 @@ import numbers
 import inspect
 import re
 import enum
-
+import dis
 
 XDR_UNIT_SIZE = 4
 XDR_BYTE_ORDER = 'big'
@@ -70,6 +70,20 @@ def xdr_is_valid_name(name):
 _xdr_mode = enum.Enum('_xdr_mode', 'ABSTRACT CONCRETE FINAL')
 
 
+def _get_assigned_name(frame):
+    iterator = iter(dis.get_instructions(frame.f_code))
+    for instr in iterator:
+        if instr.offset == frame.f_lasti:
+            break
+    else:
+        assert False, "byte code instruction missing"
+    assert instr.opname == 'SETUP_WITH'
+    instr = next(iterator)
+    if instr.opname == 'POP_TOP':
+        return None
+    return instr.argval
+
+
 class _MetaXdrType(type):
     # Concrete XDR types contain parameters that determine the
     # allowed values and operations.
@@ -78,7 +92,10 @@ class _MetaXdrType(type):
     def __setattr__(cls, name, value):
         if cls._mode is _xdr_mode.FINAL:
             raise AttributeError(f"cannot set attribute '{name:s}' to '{value}' for class '{cls.__name__:s}'")
-        super().__setattr__(name, value)
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        else:
+            cls._setattr_(name, value)
 
     def __delattr__(cls, name):
         if cls._mode is _xdr_mode.FINAL:
@@ -95,6 +112,19 @@ class _MetaXdrType(type):
     # This operation is delegated to the class method '_getitem_' (single underscores)
     def __getitem__(cls, index):
         return cls._getitem_(index)
+
+    def __enter__(cls):
+        if cls._mode is not _xdr_mode.CONCRETE:
+            raise TypeError(f"context expression '{cls.__name__:s}' "
+                            f"must be an XDR class being constructed")
+        frame = inspect.currentframe().f_back
+        name = _get_assigned_name(frame)
+        cls.__name__ = name
+        return cls
+
+    def __exit__(cls, exc_type, exc_value, exc_traceback):
+        if cls._mode is not _xdr_mode.FINAL:
+            cls._mode = _xdr_mode.FINAL
 
 
 class XdrType(metaclass=_MetaXdrType):
@@ -139,6 +169,10 @@ class XdrType(metaclass=_MetaXdrType):
     @classmethod
     def _getattr_(cls, name):
         raise AttributeError(f"'{cls.__class__.__name__:s}' object '{cls.__name__:s}' has no attribute '{name:s}'")
+
+    @classmethod
+    def _setattr_(cls, name, value):
+        raise AttributeError(f"cannot set attribute '{name:s}' in class '{cls.__name__:s}'")
 
     def __getattr__(self, name):
         return getattr(self.__class__, name)

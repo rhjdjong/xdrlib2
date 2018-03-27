@@ -47,6 +47,13 @@ class Struct(XdrType, dict):
         except KeyError:
             return super()._getattr_(name)
 
+    @classmethod
+    def _setattr_(cls, name, value):
+        if cls._mode is _xdr_mode.CONCRETE:
+            cls._set_field_type(name, value)
+        else:
+            raise AttributeError(name)
+
     def __getattr__(self, name):
         try:
             return self[name]
@@ -86,13 +93,21 @@ class Struct(XdrType, dict):
             if args:
                 raise TypeError(f"cannot subclass '{cls.__name__:s}' class with positional arguments")
             return cls.typedef(**kwargs)
-        if not kwargs and len(args) == 1 and isinstance(args[0], cls):
+        if not kwargs and len(args) == 1 and \
+                (isinstance(args[0], cls) or
+                 (issubclass(cls, Optional) and isinstance(args[0], cls._wrapped_class))):
             return super().__new__(cls, **args[0])
         else:
             return super().__new__(cls, *args, **kwargs)
 
 
     def __init__(self, *args, **kwargs):
+        if not kwargs and len(args) == 1 and \
+                (isinstance(args[0], self.__class__) or
+                 (issubclass(self.__class__, Optional) and isinstance(args[0], self.__class__._wrapped_class))):
+            self.update(args[0])
+            return
+
         if len(args) > len(self._struct_field_type):
             raise ValueError(f"too many arguments for class '{self.__class__.__name__:s}'. "
                              f"Expected {len(self._struct_field_type):d}, got {len(args):d}")

@@ -208,8 +208,13 @@ class Optional(XdrType):
         instance_class = cls._class_for_instances[is_present]
         # if is_present and not kwargs and len(args) == 1 and isinstance(args[0], instance_class._wrapped_class):
         #     return args[0]
-        instance = instance_class._wrapped_class.__new__(instance_class, *args, **kwargs)
+        instance = super(Optional, instance_class).__new__(instance_class, *args, **kwargs)
         return instance
+
+    @classmethod
+    def _getitem_(cls, index):
+        # Implicitly use the 'present' case
+        return super(Optional, cls._class_for_instances[True])._getitem_(index)
 
     def encode(self):
         if isinstance(self, Void):
@@ -227,8 +232,8 @@ class Optional(XdrType):
             if not present:
                 break
         instance_class = cls._class_for_instances[present]
-        obj, source = instance_class._wrapped_class.parse(source)
-        return cls(obj), source
+        obj, source = super(Optional, instance_class).parse(source)
+        return obj, source
 
     @staticmethod
     def _is_instantiated_as_present(*args, **kwargs):

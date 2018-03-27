@@ -128,7 +128,7 @@ def test_struct_with_self_reference():
     a = SelfRefStruct(x=3, link=None)
     b = SelfRefStruct(x=4, link=a)
     c = SelfRefStruct(x=5, link=b)
-    pa = xdrlib.Integer(3).encode()
+    pa = xdrlib.Integer(3).encode() + xdrlib.FALSE.encode()
     pb = xdrlib.Integer(4).encode() + xdrlib.TRUE.encode() + pa
     pc = xdrlib.Integer(5).encode() + xdrlib.TRUE.encode() + pb
     assert a.encode() == pa
