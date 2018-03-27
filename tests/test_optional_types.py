@@ -51,7 +51,7 @@ def test_absent_optional_value_instantiation(xdrtype):
 def test_optional_type_can_be_made_optional():
     new_optional_type = xdrlib.Optional(optional_integer_type)
     x = new_optional_type(3)
-    y = new_optional_type()
+    y = new_optional_type(None)
     assert isinstance(x, xdrlib.Integer)
     assert isinstance(x, optional_integer_type)
     assert isinstance(x, new_optional_type)
@@ -83,7 +83,7 @@ def test_cannot_create_optional_classes_through_derived_optional_class():
 
 def test_verify_class_hierarchy():
     x = optional_integer_type(3)
-    y = optional_integer_type()
+    y = optional_integer_type(None)
     assert optional_integer_type.__bases__ == (xdrlib.Optional,)
     assert type(x).__bases__ == (optional_integer_type, xdrlib.Integer)
     assert type(y).__bases__ == (optional_integer_type, xdrlib.Void)

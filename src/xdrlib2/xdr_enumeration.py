@@ -50,7 +50,7 @@ class Enumeration(Integer):
                                  f"'{cls.__name__:s}' class requires value")
             return super().__new__(cls, value, **kwargs)
         else:
-            arg = min(cls._enumeration_value.values()) if value is None else value
+            arg = min(cls._enum_value_by_name.values()) if value is None else value
 
             if isinstance(arg, str):
                 try:

@@ -20,13 +20,11 @@ SimpleUnion.case(3, text=xdrlib.String.typedef(size=10))
 SimpleUnion.case(4, foo=xdrlib.UnsignedInteger)
 SimpleUnion.default(whatever=xdrlib.FixedOpaque.typedef(size=4))
 
+with xdrlib.Union(discr=xdrlib.Enumeration.typedef(a=1, b=2, c=3)) as SimpleUnionFromEnum:
+    SimpleUnionFromEnum.case(1, xdrlib.Void)
+    SimpleUnionFromEnum.case(2, number=xdrlib.Integer)
+    SimpleUnionFromEnum.case(3, logic=xdrlib.Boolean)
 
-SimpleUnionFromEnum = xdrlib.Union.typedef('SimpleUnionFromEnum',
-                                           discr=xdrlib.Enumeration.typedef(a=1, b=2, c=3))
-SimpleUnionFromEnum.case(1, xdrlib.Void)
-SimpleUnionFromEnum.case(2, number=xdrlib.Integer)
-SimpleUnionFromEnum.case(3, logic=xdrlib.Boolean)
-SimpleUnionFromEnum.default()
 
 UnfinishedUnion = xdrlib.Union(kind=xdrlib.Integer)
 
@@ -212,34 +210,21 @@ def test_union_case_introspection_fails_for_invalid_case_value():
         UnionWithDefault.case(10)
 
 
-def test_union_instantiation_through_arm_name():
-    a = UnionWithDefault.number(123)
-    b = UnionWithDefault.text(b'hallo')
-    c = UnionWithDefault.flag(True)
-    assert isinstance(a, UnionWithDefault)
-    assert isinstance(a, xdrlib.Integer)
-    assert isinstance(b, UnionWithDefault)
-    assert isinstance(b, xdrlib.String)
-    assert isinstance(c, UnionWithDefault)
-    assert isinstance(c, xdrlib.Boolean)
-    assert a.switch == 1
-    assert b.switch in (2, 3)
-    assert c.switch == 4
-    pa = a.switch.encode() + xdrlib.Integer(123).encode()
-    pb = b.switch.encode() + xdrlib.String(size=10)(b'hallo').encode()
-    pc = c.switch.encode() + xdrlib.Boolean(True).encode()
-    assert a.encode() == pa
-    assert b.encode() == pb
-    assert c.encode() == pc
-    a1 = UnionWithDefault.decode(pa)
-    b1 = UnionWithDefault.decode(pb)
-    c1 = UnionWithDefault.decode(pc)
-    assert a1 == a
-    assert b1 == b
-    assert c1 == c
-    assert a1.encode() == pa
-    assert b1.encode() == pb
-    assert c1.encode() == pc
+@pytest.mark.parametrize('arm,switch_values,arg,argtype,packed', [
+    ('number', (1,), 123, xdrlib.Integer, xdrlib.Integer(123).encode()),
+    ('text', (2, 3), b'hallo', xdrlib.String, xdrlib.String(size=10)(b'hallo').encode()),
+    ('flag', (4,), True, xdrlib.Boolean, xdrlib.Boolean(True).encode())
+])
+def test_union_instantiation_through_arm_name(arm, switch_values, arg, argtype, packed):
+    x = getattr(UnionWithDefault, arm)(arg)
+    assert isinstance(x, UnionWithDefault)
+    assert isinstance(x, argtype)
+    assert x.switch in switch_values
+    p = x.switch.encode() + packed
+    assert x.encode() == p
+    nx = UnionWithDefault.decode(p)
+    assert nx == x
+    assert nx.encode() == p
 
 
 def test_union_subclassing_fails_for_invalid_swith_type():
@@ -247,12 +232,41 @@ def test_union_subclassing_fails_for_invalid_swith_type():
         xdrlib.Union(discr=xdrlib.Hyper)
 
 
-def test_optional_union():
-    OptUnion = xdrlib.Optional(SimpleUnion)
-    y1 = OptUnion[1](None)
-    y2 = OptUnion[2](True)
-    y3 = OptUnion[3](b'hallo')
-    y4 = OptUnion[4](13)
-    y5 = OptUnion[5](b'dumb')
-    no = OptUnion()
+OptUnion = xdrlib.Optional(SimpleUnion)
+
+
+# @pytest.mark.parametrize('present,switch,arg,argtype', [
+#     (True, 1, None, xdrlib.Void),
+#     (True, 2, True, xdrlib.Boolean),
+#     (True, 3, b'hallo', xdrlib.String(size=10)),
+#     (True, 4, 13, xdrlib.UnsignedInteger),
+#     (True, 5, b'dumb', xdrlib.FixedOpaque(size=4)),
+#     (False, None, None, None)
+# ])
+# def test_optional_union(present, switch, arg, argtype):
+#     if present:
+#         y = OptUnion[switch](arg)
+#         assert isinstance(y, OptUnion)
+#         assert isinstance(y, OptUnion[switch])
+#         assert isinstance(y, SimpleUnion)
+#         assert not isinstance(y, xdrlib.Void)
+#         p = xdrlib.TRUE.encode() + xdrlib.Integer(switch).encode() + argtype(arg).encode()
+#     else:
+#         y = OptUnion(None)
+#         assert isinstance(y, OptUnion)
+#         assert isinstance(y, xdrlib.Void)
+#         assert not isinstance(y, SimpleUnion)
+#         p = xdrlib.FALSE.encode()
+#     assert y.encode() == p
+#     ny = OptUnion.decode(p)
+#     assert ny == y
+#     assert ny.encode() == p
+
+# def test_self_refererntial_union():
+#     with xdrlib.Union(switch=xdrlib.Integer) as SelfRefUnion:
+#         SelfRefUnion.case(1, a=xdrlib.Integer)
+#         SelfRefUnion.case(2, link=xdrlib.Optional(SelfRefUnion))
+#     ua = SelfRefUnion[1](13)
+#     ub = SelfRefUnion[2](None)
+#     uc = SelfRefUnion[2](ua)
 

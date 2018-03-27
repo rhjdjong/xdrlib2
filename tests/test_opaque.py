@@ -209,7 +209,7 @@ def test_optional_fixed_length_opaque():
     optType = xdrlib.Optional(xdrlib.FixedOpaque.typedef(size=5))
     byte_str = b'\0\xff\xab\xcd\x01'
     yes = optType(byte_str)
-    no = optType()
+    no = optType(None)
     assert isinstance(yes, optType)
     assert yes == byte_str
     assert no == None
@@ -233,7 +233,7 @@ def test_optional_variable_length_opaque(seqtype):
     optType = xdrlib.Optional(seqtype)
     byte_str = b'\xff\xab\xcd\x01'
     yes = optType(byte_str)
-    no = optType()
+    no = optType(None)
     assert isinstance(yes, optType)
     assert isinstance(no, optType)
     assert isinstance(yes, seqtype)

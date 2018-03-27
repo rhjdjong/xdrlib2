@@ -223,7 +223,9 @@ class XdrType(metaclass=_MetaXdrType):
             delattr(cls, name)
         return parameters
 
-
+    @classmethod
+    def _prepare_for_optional_use(cls, other_class):
+        pass
 
     @classmethod
     def _init_concrete_subclass_(cls, **kwargs):
@@ -312,7 +314,7 @@ class Void(XdrType):
 
     @classmethod
     def parse(cls, bstr):
-        return cls(), bstr
+        return cls(None), bstr
 
     def __eq__(self, other):
         return other is None or isinstance(other, Void)

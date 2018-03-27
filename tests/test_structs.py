@@ -79,7 +79,7 @@ def test_struct_field_modification_fails_with_wrong_argument_type():
 def test_optional_struct():
     opt_type = xdrlib.Optional(MyStruct)
     yes = opt_type(3, b'hello', 0)
-    no = opt_type()
+    no = opt_type(None)
     assert isinstance(yes, opt_type)
     assert isinstance(yes, MyStruct)
     assert isinstance(no, opt_type)

@@ -153,7 +153,7 @@ def test_anonymous_enumeration():
 
 def test_optional_enumeration():
     OptColor = xdrlib.Optional(Colors)
-    n = OptColor()
+    n = OptColor(None)
     assert isinstance(n, OptColor)
     assert isinstance(n, xdrlib.Void)
     assert n == None

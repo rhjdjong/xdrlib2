@@ -515,7 +515,7 @@ def test_float_types_cannot_be_modified(xdrtype):
 def test_optional_float_types(xdrtype):
     Opt = xdrlib.Optional(xdrtype)
 
-    v = Opt()
+    v = Opt(None)
     assert isinstance(v, Opt)
     assert isinstance(v, xdrlib.Void)
     assert not isinstance(v, xdrtype)

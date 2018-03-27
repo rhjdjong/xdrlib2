@@ -150,6 +150,10 @@ class Union(XdrType):
         }
         cls._mode = _xdr_mode.FINAL
 
+    # @classmethod
+    # def _prepare_for_optional_use(cls, optional_class):
+    #     optional_class._union_parameters = cls._union_parameters.copy()
+    #     for index, arm_type in cls._union_parameters['arm_type']:
     # def __init_subclass__(cls, **kwargs):
     #     # Remove the known 'case', 'default', 'switch' methods and attribute from the parameters
     #     if cls._final:
@@ -319,7 +323,7 @@ class Union(XdrType):
         else:
             if not args:
                 raise ValueError(f"case clause requires one or more switch values.")
-            args = (cls.switch_type(v) for v in args)
+            args = tuple((cls.switch_type(v) for v in args))
 
         if arm_name and (arm_name == cls.switch_name or arm_name in cls.switch_by_name):
             raise ValueError(f"duplicate name '{arm_name:s}' in union class '{cls.__name__:s}'")
@@ -332,7 +336,7 @@ class Union(XdrType):
             raise TypeError(f"abstract or unfinished class '{arm_name:s}={arm_type.__name__:s}' "
                             f"for class '{cls.__name__:s}'")
         # Create a new subclass that is also a subclass of the arm type
-        arm_class = cls.typedef(cls.__name__, arm_type, type=arm_type)
+        arm_class = cls.typedef(f"{cls.__name__:s}[{','.join(str(a) for a in args)}]", arm_type, type=arm_type)
         for switch_value in args:
             cls.arm_name[switch_value] = arm_name
             cls.arm_type[switch_value] = arm_class

@@ -241,7 +241,7 @@ def test_optional_fixed_length_array():
         b'klmno',
     )
     yes = optType(strings)
-    no = optType()
+    no = optType(None)
     assert isinstance(yes, optType)
     assert yes == list(strings)
     assert no == None
@@ -254,7 +254,7 @@ def test_optional_fixed_length_array():
     assert yes2 == yes
     assert yes2.encode() == pyes
     no2 = optType.decode(pno)
-    assert no2 == no
+    # assert no2 == no
     assert no2.encode() == pno
 
 
@@ -266,7 +266,7 @@ def test_optional_variable_length_array():
         xdrlib.FALSE
     )
     yes = optType(booleans)
-    no = optType()
+    no = optType(None)
     assert isinstance(yes, optType)
     assert isinstance(no, optType)
     assert isinstance(yes, xdrlib.VarArray)

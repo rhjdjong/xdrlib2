@@ -107,8 +107,8 @@ class Optional(XdrType):
 
     @classmethod
     def _init_abstract_subclass_(cls, wrapped_class):
-        if issubclass(wrapped_class, Void):
-            raise TypeError(f"Void (sub)class '{wrapped_class.__name__:s}' cannot be made optional")
+        if wrapped_class is Void:
+            raise TypeError(f"Void cannot be made optional")
         if issubclass(wrapped_class, Optional):
             cls._optional_level = wrapped_class._optional_level + 1
             cls._wrapped_class = wrapped_class._wrapped_class
@@ -120,14 +120,16 @@ class Optional(XdrType):
             absent_base_class = Void
             present_base_class = wrapped_class
         cls._mode = _xdr_mode.CONCRETE
-        absent_class = cls.typedef(None, absent_base_class, optional=Void)
-        present_class = cls.typedef(None, present_base_class, optional=cls._wrapped_class)
+        absent_class = cls.typedef(cls.__name__ + '[False]', absent_base_class, optional=Void)
+        present_class = cls.typedef(cls.__name__ + '[True]', present_base_class, optional=cls._wrapped_class)
         cls._class_for_instances = {False: absent_class, True: present_class}
         cls._mode = _xdr_mode.FINAL
 
     @classmethod
     def _init_concrete_subclass_(cls, wrapped_class):
         cls._wrapped_class = wrapped_class
+        wrapped_class._prepare_for_optional_use(cls)
+
         # w = wrapped_class
         # while isinstance(w, Optional):
         #     w = w._class_for_instances[True]
@@ -214,7 +216,8 @@ class Optional(XdrType):
     @classmethod
     def _getitem_(cls, index):
         # Implicitly use the 'present' case
-        return super(Optional, cls._class_for_instances[True])._getitem_(index)
+        item_class = super(Optional, cls._class_for_instances[True])._getitem_(index)
+        return cls.typedef(None, item_class, optional=item_class)
 
     def encode(self):
         if isinstance(self, Void):
@@ -237,7 +240,7 @@ class Optional(XdrType):
 
     @staticmethod
     def _is_instantiated_as_present(*args, **kwargs):
-        return not (args in ((), (None,)) and not kwargs)
+        return not args == (None,) and not kwargs
 
     # @classmethod
     # def _make_optional_class(cls, original_class):
