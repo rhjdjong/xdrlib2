@@ -26,32 +26,68 @@ DOG = Animals.DOG
 HORSE = Animals.HORSE
 
 
-def test_enumeration_with_subclass_arguments():
+@pytest.mark.parametrize("enumtype,intvalue,enumvalue", [
+    (Colors, 2, RED),
+    (Colors, 3, YELLOW),
+    (Colors, 5, BLUE),
+    (Animals, 1, CAT),
+    (Animals, 2, DOG),
+    (Animals, 5, HORSE)
+])
+def test_enumeration_values_are_singletons(enumtype, intvalue, enumvalue):
+    assert enumtype(intvalue) == enumvalue
+
+
+@pytest.mark.parametrize("enumtype,default", [
+    (Colors, Colors.RED),
+    (Animals, Animals.CAT)
+])
+def test_default_enumeration_value_is_first_defined_value(enumtype, default):
+    assert enumtype() == default
+
+
+@pytest.mark.parametrize("enumtype,values", [
+    (Colors, [Colors.RED, Colors.YELLOW, Colors.BLUE]),
+    (Animals, [Animals.CAT, Animals.DOG, Animals.HORSE])
+])
+def test_enumeration_values_are_iterable(enumtype, values):
+    for i, v in zip(enumtype, values):
+        assert i == v
+
+
+@pytest.mark.parametrize("enumtype,name,value", [
+    (Colors, 'BLUE', BLUE),
+    (Animals, 'DOG', DOG)
+])
+def test_enumeration_type_can_be_indexed(enumtype, name, value):
+    assert enumtype[name] == value
+
+
+def test_class_hierarchy():
     assert issubclass(Colors, xdrlib.Enumeration)
-    r = Colors.RED
-    assert r == 2
-    assert isinstance(r, Colors)
-    y = Colors('YELLOW')
-    assert isinstance(y, Colors)
-    assert y == 3
-    b = current_module.BLUE
-    assert isinstance(b, Colors)
-    assert b == 5
-    assert Colors(3) == y
-
-
-def test_enumeration_with_class_parameters():
     assert issubclass(Animals, xdrlib.Enumeration)
-    c = Animals.CAT
-    assert isinstance(c, Animals)
-    assert c == 1
-    d = Animals('DOG')
-    assert isinstance(d, Animals)
-    assert d == 2
-    h = current_module.HORSE
-    assert isinstance(h, Animals)
-    assert h == 5
-    assert Animals(1) == c
+
+
+def test_enumeration_values_are_instances_of_their_class():
+    assert isinstance(RED, Colors)
+    assert isinstance(DOG, Animals)
+
+
+def test_enumeration_values_are_integers():
+    assert Colors.RED == 2
+    assert Colors['YELLOW'] == 3
+    assert BLUE == 5
+    assert Animals.CAT == 1
+    assert Animals['DOG'] == 2
+    assert HORSE == 5
+
+
+@pytest.mark.parametrize("value,str_rep", [
+    (Colors.RED, 'RED(2)'),
+    (Animals.HORSE, 'HORSE(5)')
+])
+def test_string_representation_for_enumeration_values(value, str_rep):
+    assert str(value) == str_rep
 
 
 def test_predefined_boolean_values():
@@ -62,22 +98,14 @@ def test_predefined_boolean_values():
     assert xdrlib.TRUE == 1
 
 
-def test_instantiation_by_name():
-    r = Colors('RED')
-    assert r == Colors.RED
-    assert r == 2
-    assert isinstance(r, Colors)
-    with pytest.raises(ValueError):
-        Colors('Unknown')
+def test_unknown_enum_name_raises_value_error():
+    with pytest.raises(AttributeError):
+        Colors['Unknown']
 
 
-def test_instantiation_by_value():
-    b = Colors(5)
-    assert b == Colors.BLUE
-    assert b == 5
-    assert isinstance(b, Colors)
+def test_unknown_enum_value_raises_value_error():
     with pytest.raises(ValueError):
-        Colors(10)
+        Animals(10)
 
 
 def test_cannot_intantiate_abstract_baseclass():
@@ -107,31 +135,31 @@ def test_cannot_delete_enumeration_identifiers():
 
 
 def test_cannot_create_enumeration_that_overrides_module_attribute():
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         class InvalidEnum(xdrlib.Enumeration, OK_NAME=1, EXISTING_VALUE=2):
             EXISTING_VALUE = 3
 
 
-def test_can_create_enumeration_with_python_keywords():
-    weird_enum = xdrlib.Enumeration.typedef('Weird', **{'id': 1, 'if': 2, 'while': 3})
-    assert weird_enum.id == 1
-    assert weird_enum('if') == 2
+# def test_cannot_create_enumeration_with_python_keywords():
+#     weird_enum = xdrlib.Enumeration.typedef('Weird', **{'id': 1, 'if': 2, 'while': 3})
+#     assert weird_enum.id == 1
+#     assert weird_enum('if') == 2
 
 
 def test_packing_of_enumerations():
-    p = Colors.RED.encode()
+    p = xdrlib.encode(Colors.RED)
     assert p == b'\0\0\0\x02'
 
 
 def test_unpacking_of_enumerations():
-    n = Colors.decode(b'\0\0\0\x03')
+    n = xdrlib.decode(Colors, b'\0\0\0\x03')
     assert isinstance(n, Colors)
     assert n == Colors.YELLOW
 
 
 def test_unpacking_invalid_value_fails():
     with pytest.raises(ValueError):
-        Colors.decode(b'\0\0\0\x04')
+        xdrlib.decode(Colors, b'\0\0\0\x04')
 
 
 def test_boolean():
@@ -141,55 +169,45 @@ def test_boolean():
     assert xdrlib.Boolean(False) == xdrlib.FALSE
 
 
-def test_anonymous_enumeration():
-    anon = xdrlib.Enumeration(XX=3, YY=4)
-    assert issubclass(anon, xdrlib.Enumeration)
-    xx = anon.XX
-    assert isinstance(xx, anon)
-    assert xx == 3
-    assert xx.encode() == b'\0\0\0\x03'
-    assert anon.decode(b'\0\0\0\x04') == anon.YY
-
-
 def test_optional_enumeration():
     OptColor = xdrlib.Optional(Colors)
-    n = OptColor()
+    n = OptColor(None)
     assert isinstance(n, OptColor)
     assert isinstance(n, xdrlib.Void)
     assert n == None
     pn = b'\0\0\0\0'
-    assert n.encode() == pn
-    n1 =  OptColor.decode(pn)
+    assert xdrlib.encode(n) == pn
+    n1 =  xdrlib.decode(OptColor, pn)
     assert n1 == n
-    assert n1.encode() == pn
+    assert xdrlib.encode(n1) == pn
 
     r = OptColor(2)
     assert isinstance(r, OptColor)
     assert isinstance(r, Colors)
     assert r == Colors.RED
     pr = b'\0\0\0\x01' b'\0\0\0\x02'
-    assert r.encode() == pr
-    r1 = OptColor.decode(pr)
+    assert xdrlib.encode(r) == pr
+    r1 = xdrlib.decode(OptColor, pr)
     assert r1 == r
-    assert r1.encode() == pr
+    assert xdrlib.encode(r1) == pr
 
-    y = OptColor('YELLOW')
+    y = OptColor['YELLOW']
     assert isinstance(y, OptColor)
     assert isinstance(y, Colors)
     assert y == Colors.YELLOW
     py = b'\0\0\0\x01' b'\0\0\0\x03'
-    assert y.encode() == py
-    y1 = OptColor.decode(py)
+    assert xdrlib.encode(y) == py
+    y1 = xdrlib.decode(OptColor, py)
     assert y1 == y
-    assert y1.encode() == py
+    assert xdrlib.encode(y1) == py
 
-    b = OptColor(Colors.BLUE)
+    b = OptColor.BLUE
     assert isinstance(b, OptColor)
     assert isinstance(b, Colors)
     assert b == Colors.BLUE
     pb = b'\0\0\0\x01' b'\0\0\0\x05'
-    assert b.encode() == pb
-    b1 = OptColor.decode(pb)
+    assert xdrlib.encode(b) == pb
+    b1 = xdrlib.decode(OptColor, pb)
     assert b1 == b
-    assert b1.encode() == pb
+    assert xdrlib.encode(b1) == pb
 

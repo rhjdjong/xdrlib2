@@ -2,116 +2,137 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrType
+from .xdr_core import XdrType, xdr_mode, xdr_is_valid_name
+from .xdr_union import Optional
 
-class Struct(XdrType):
+class Struct(XdrType, dict):
+    _mode = xdr_mode.ABSTRACT
 
     def __init_subclass__(cls, **kwargs):
-        parameters = cls._get_class_creation_information(**kwargs)
-        if cls._final:
-            if parameters:
-                raise TypeError(f"cannot extend struct class '{cls.__name__:s}' "
-                                f"with additional fields {parameters!s}")
+        parameters = cls._get_class_parameters(**kwargs)
+        if parameters:
+            if cls._mode is xdr_mode.FINAL:
+                raise TypeError(f"cannot subclass final type "
+                                f"'{cls.__name__:s}' with modifications.")
+        cls._struct_field_type = {}
+        if not parameters:
+            if cls._mode is xdr_mode.ABSTRACT:
+                cls._mode = xdr_mode.CONCRETE  # Allow for later additions
         else:
-            if cls._abstract:
-                if not parameters:
-                    raise TypeError(f"struct subclass '{cls.__name__:s}' "
-                                    f"requires definition of fields.")
-                if '_struct_field_type' in vars(cls):
-                    if parameters:
-                        raise TypeError(f"{cls.__name:s}: redefinition of struct types not allowed.")
-                else:
-                    cls._abstract = False
-                    cls._struct_field_type = {}
-                    for name, value in parameters.items():
-                        if not cls._is_valid_xdr_name(name):
-                            raise ValueError(f"invalid struct field name '{name:s}' "
-                                             f"for class '{cls.__name__:s}'")
-                        cls._struct_field_type[name] = value
-            cls._final = True
+            for name, value in parameters.items():
+                cls._set_field_type(name, value)
+            cls._mode = xdr_mode.FINAL
+
 
     @classmethod
-    def _getattr(cls, name):
+    def _set_field_type(cls, name, value):
+        if not xdr_is_valid_name(name):
+            raise ValueError(f"invalid field name '{name:s}' "
+                             f"for struct '{cls.__name__:s}'")
+        if name in cls._struct_field_type:
+            raise TypeError(f"duplicate field name '{name:s}' for struct '{cls.__name__:s}'")
+        if not issubclass(value, XdrType):
+            raise TypeError(f"invalid field {name:s}={value!s} "
+                            f"for struct '{cls.__name__:s}'")
+        cls._struct_field_type[name] = value
+
+    @classmethod
+    def _getattr_(cls, name):
         try:
-            return cls(cls._struct_field_type[name])
+            return cls._struct_field_type[name]
         except KeyError:
-            raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
-                                 f"has no attribute '{name:s}'") from None
+            return super()._getattr_(name)
+
+    @classmethod
+    def _getitem_(cls, index):
+        try:
+            return cls._struct_field_type[index]
+        except KeyError:
+            return super()._getitem_(index)
+
+    @classmethod
+    def _setattr_(cls, name, value):
+        if cls._mode is xdr_mode.CONCRETE:
+            cls._set_field_type(name, value)
+        else:
+            raise AttributeError(name)
 
     def __getattr__(self, name):
         try:
-            return self._struct_field[name]
+            return self[name]
         except KeyError:
             raise AttributeError(f"{self.__class__.__name__:s} object "
-                             f"has no attribute '{name:s}'") from None
+                                 f"has no attribute '{name:s}'") from None
 
     def __setattr__(self, name, value):
         if name.startswith('_'):
             super().__setattr__(name, value)
         else:
             try:
-                self._struct_field[name] = self._struct_field_type[name](value)
+                item_type = self._struct_field_type[name]
             except KeyError:
                 raise AttributeError(f"attribute '{name:s}' of '{self.__class__.__name__:s}' "
                                      f"object cannot be written.") from None
+            self[name] = item_type(value)
 
     def __delattr__(self, name):
         if name.startswith('_'):
             super().__delattr__(name)
         else:
-            if name in self._struct_field:
-                self._struct_field[name] = None
+            try:
+                item_type = self._struct_field_type[name]
+            except KeyError:
+                raise AttributeError(name) from None
+            if issubclass(item_type, Optional):
+                self._struct_field[name] = item_type(None)
             else:
                 raise AttributeError(f"attribute '{name:s}' of '{self.__class__.__name__:s}' "
                                      f"object cannot be deleted.")
 
-    def __new__(cls, *args, **kwargs):
-        if cls._abstract:
-            if not kwargs:
-                raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-            return cls.typedef(**kwargs)
-
-        instance = super().__new__(cls)
-        instance._struct_field = dict.fromkeys(cls._struct_field_type)
-        return instance
-
     def __init__(self, *args, **kwargs):
-        if len(args) > len(self._struct_field):
+        if self.__class__._mode is xdr_mode.ABSTRACT:
+            raise NotImplementedError(f"cannot instantiate abstract '{self.__class__.__name__:s}' class")
+
+        if len(args) == 1 and not kwargs:
+            if isinstance(args[0], self.__class__):
+                self.update(args[0])
+            return
+
+        if len(args) > len(self._struct_field_type):
             raise ValueError(f"too many arguments for class '{self.__class__.__name__:s}'. "
-                             f"Expected {len(self._struct_field):d}, got {len(args):d}")
-        arguments = list(args[:len(self._struct_field_type)])
-        for name in list(self._struct_field_type.keys())[len(args):]:
-            arguments.append(kwargs.pop(name, None))
-        if kwargs:
-            raise ValueError(f"invalid keywords {kwargs.keys()!s} for class '{self.__class__.__name__:s}'")
-        if len(arguments) != len(self._struct_field_type):
-            raise ValueError(f"expected {len(self._struct_field_type):d} field values, "
-                             f"got {len(arguments) + len(kwargs):d}.")
+                             f"Expected {len(self._struct_field_type):d}, got {len(args):d}")
+        for (name, typ), value in zip(self._struct_field_type.items(), args):
+            self[name] = value if isinstance(value, typ) else typ(value)
 
-        for (name, typ), value in zip(self._struct_field_type.items(), arguments):
-            self._struct_field[name] = typ(value)
+        for name, typ in list(self._struct_field_type.items())[len(self):]:
+            v = kwargs.pop(name, None)
+            if v is not None:
+                self[name] = v if isinstance(v, typ) else typ(v)
+            else:
+                self[name] = typ()
 
-    def encode(self):
-        return b''.join(x.encode() for x in self._struct_field.values())
+    def _encode_(self):
+        return b''.join(element._encode_() for element in self.values())
 
     @classmethod
-    def parse(cls, bstr):
+    def _decode_(cls, bstr):
         items = []
         for xdrtype in cls._struct_field_type.values():
-            item, bstr = xdrtype.parse(bstr)
+            item, bstr = xdrtype._decode_(bstr)
             items.append(item)
         return cls(*items), bstr
 
     def __eq__(self, other):
-        if not type(self) == type(other):
+        if not self._eq_class(other):
+        # if not type(self) == type(other):
             return False
-        return all(getattr(self, n) == getattr(other, n) for n in self._struct_field)
+        return all(self[n] == other[n] for n in self._struct_field_type.keys())
 
     def __ne__(self, other):
         return not self == other
 
     def __repr__(self):
-        return f"{self.__class__.__name__:s}({', '.join(str(v) for v in self._struct_field.values()):s})"
+        return f"{self.__class__.__name__:s}({', '.join(str(v) for v in self.values()):s})"
 
     def __str__(self):
-        return '{' + ', '.join(str(v) for v in self._struct_field.values()) + '}'
+        return '{' + ', '.join(str(v) for v in self.values()) + '}'

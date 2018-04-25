@@ -2,8 +2,15 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-import inspect
+import numbers
+import abc
 import re
+import enum
+
+
+XDR_UNIT_SIZE = 4
+XDR_BYTE_ORDER = 'big'
+
 
 reserved_names = (
     'bool',
@@ -26,139 +33,186 @@ reserved_names = (
     'void',
 )
 
-class _MetaXdrType(type):
-    def __init__(cls, name, bases, dct, **kwargs):
-        super().__init__(name, bases, dct, **kwargs)
-        # Execute class-specific initialization
-        cls._init_class(dct, **kwargs)
 
+def xdr_padded(bstr):
+    return bstr + xdr_padding(len(bstr))
+
+
+def xdr_padded_size(size):
+    return size + xdr_padding_size(size)
+
+
+def xdr_padding(size):
+    return b'\0' * xdr_padding_size(size)
+
+
+def xdr_padding_size(size):
+    return ((XDR_UNIT_SIZE - size % XDR_UNIT_SIZE) % XDR_UNIT_SIZE)
+
+
+def xdr_split_and_remove_padding(bstr, size):
+    padded_size = xdr_padded_size(size)
+    if len(bstr) < padded_size:
+        raise ValueError(f"byte sequence too short. "
+                         f"Expected {padded_size:d} bytes, "
+                         f"got {len(bstr):d} bytes.")
+    if any(b for b in bstr[size:padded_size]):
+        raise ValueError(f"non-zero padding byte(s) encountered: {bstr[size:padded_size]!s}'")
+    return bstr[:size], bstr[padded_size:]
+
+
+def xdr_is_valid_name(name):
+    if name in reserved_names:
+        return False
+    return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
+
+
+xdr_mode = enum.Enum('xdr_mode', 'ABSTRACT CONCRETE FINAL')
+
+
+def encode(x):
+    return x._encode_()
+
+
+def decode(cls, bstr):
+    obj, rest = cls._decode_(bstr)
+    if rest != b'':
+        raise ValueError(f"input contains additional data '{rest}'")
+    return obj
+
+
+def _is_valid_xdr_name(name):
+    if name in reserved_names:
+        return False
+    return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
+
+
+class _MetaXdrType(abc.ABCMeta):
     # Concrete XDR types contain parameters that determine the
     # allowed values and operations.
     # To prevent inadvertent modifications of these parameters,
     # creating, modifying, or deleting these parameters is not allowed.
+    # def __setattr__(cls, name, value):
+    #     if cls._mode is xdr_mode.FINAL:
+    #         raise AttributeError(f"cannot set attribute '{name:s}' to '{value}' for class '{cls.__name__:s}'")
+    #     if name.startswith('_'):
+    #         super().__setattr__(name, value)
+    #     else:
+    #         cls._setattr_(name, value)
+    #
+    # def __delattr__(cls, name):
+    #     if cls._mode is xdr_mode.FINAL:
+    #         raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
+    #     super().__delattr__(name)
+
+    # Concrete classes expose their parameters as class attributes.
+    # Some classes, e.g. structs and unions, also expose their members as class attributes.
+    # Name resolution is delegated to the class method '_getattr_' (single underscores).
+    def __getattr__(cls, name):
+        return cls._getattr_(name)
+
     def __setattr__(cls, name, value):
-        if cls._final:
-            raise AttributeError(f"cannot set attribute '{name:s}' to '{value}' for class '{cls.__name__:s}'")
-        super().__setattr__(name, value)
+        if name in cls._xdr_parameters:
+            if cls._mode is xdr_mode.FINAL:
+                raise AttributeError(f"cannot set xdr parameter '{name:s}' to {value!r} "
+                                     f"for class '{cls.__name__:s}'")
+            cls._xdr_parameters[name] = value
+        elif xdr_is_valid_name(name):
+            cls._setattr_(name, value)
+        else:
+            super().__setattr__(name, value)
 
     def __delattr__(cls, name):
-        if cls._final:
-            raise AttributeError(f"cannot delete attribute '{name:s}' from class '{cls.__name__:s}'")
-        super().__delattr__(name)
-
-    def __getattr__(cls, name):
-        return cls._getattr(name)
-        # if name in cls._names:
-        #     return cls._names[name]
-        # raise AttributeError(f"{cls.__class__.__name__:s} object '{cls.__name__:s}' "
-        #                      f"has no attribute '{name:s}'")
+        if name in cls._xdr_parameters:
+            if cls._mode is xdr_mode.FINAL:
+                raise AttributeError(f"Cannot delete xdr parameter '{name:s}' "
+                                     f"for class '{cls.__name__:s}'")
+            cls._xdr_parameters[name] = None
+        else:
+            super().__delattr__(name)
 
     def __getitem__(cls, index):
-        return cls._get_item(index)
+        return cls._getitem_(index)
+
+    def __enter__(cls):
+        if cls._mode is not xdr_mode.CONCRETE:
+            raise TypeError(f"context expression '{cls.__name__:s}' "
+                            f"must be an XDR class being constructed")
+        return cls
+
+    def __exit__(cls, exc_type, exc_value, exc_traceback):
+        if cls._mode is not xdr_mode.FINAL:
+            cls._mode = xdr_mode.FINAL
 
 
 class XdrType(metaclass=_MetaXdrType):
-    _final = False
-    _abstract = True
-    _parameters = ()
+    _mode = xdr_mode.ABSTRACT
+    _parameters = ()    # Parameters used by an XDR factory class
+    _xdr_parameters = {}
+    _optional_level = 0
+    _optional = False
 
     @classmethod
-    def _init_class(cls, dct, **kwargs):
-        pass
+    def _getattr_(cls, name):
+        try:
+            return cls._xdr_parameters[name]
+        except KeyError:
+            raise AttributeError(f"'{cls.__class__.__name__:s}' object '{cls.__name__:s}' "
+                                 f"has no attribute '{name:s}'") from None
 
     @classmethod
-    def _create_anonymous_subclass(cls, *args, **kwargs):
-        if args:
-            raise ValueError(f"Cannot instantiate abstract class {cls.__name__:s} for {args!s}")
-        return cls.typedef(**kwargs)
+    def _setattr_(cls, name, value):
+        if cls._mode is xdr_mode.FINAL:
+            raise AttributeError(f"cannot set attribute '{name:s}' in final class '{cls.__name__:s}'")
+        cls._xdr_parameters[name] = value
+
+    def __getattr__(self, name):
+        return getattr(self.__class__, name)
 
     @classmethod
-    def _validate_arguments(cls, *args, **kwargs):
+    def _getitem_(cls, index):
+        raise TypeError(f"class '{cls.__name__:s}' is not subscriptable")
+
+    @classmethod
+    def _get_class_parameters(cls, **kwargs):
+        """
+        This method obtains the parameters from the class body
+        (any attribute that does not start with an underscore)
+        and the kwargs parameter in the argument.
+        The parameters found in the class body are removed from the body,
+        to avoid conflicts with e.g. class properties with the same name.
+        """
+        cls_vars = vars(cls).copy()
+        parameters = {}
+        for name, value in cls_vars.items():
+            if cls._is_xdr_class_parameter(name, value):
+                parameters[name] = value
+                delattr(cls, name)
+        duplicate_names = parameters.keys() & kwargs.keys()
+        if duplicate_names:
+            raise TypeError(f"class '{cls.__name__:s}' got duplicate class parameter(s) '{duplicate_names!s}")
+        parameters.update(kwargs)
+        return parameters
+
+    @classmethod
+    def _is_xdr_class_parameter(cls, name, value):
+        if name.startswith('_'):
+            return False
+        if name in cls._parameters:
+            return True
+        if isinstance(value, (numbers.Number, str)):
+            return True
+        try:
+            return issubclass(value, XdrType)
+        except TypeError:
+            return False
+
+    def _encode_(self):
         raise NotImplementedError
 
     @classmethod
-    def _getattr(cls, name):
-        raise AttributeError(f"'{cls.__class__.__name__:s}' object '{cls.__name__:s}' has no attribute '{name:s}'")
-
-    @classmethod
-    def _get_item(cls, index):
-        raise NotImplementedError(f"class '{cls.__name__:s}' does not support indexing.")
-
-    @classmethod
-    def _get_class_creation_information(cls, **kwargs):
-        if cls._final:
-            if kwargs:
-                # This is subclassing a concrete type with additional or modified parameters
-                raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
-            return {}  # Subclassing without modifications is OK
-
-        parameters = {n: v for n, v in vars(cls).items() if not n.startswith('_')}
-        for n in kwargs:
-            if n in parameters:
-                raise ValueError(f"class '{cls.__name__:s}' got duplicate class parameter '{n:s}'")
-        parameters.update(kwargs)
-
-        if cls._final and parameters:
-            raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
-
-        for n in parameters:
-            if n in vars(cls):
-                delattr(cls, n)
-        return parameters
-
-    @classmethod
-    def _get_names_from_class_body(cls, *args):
-        parameters = {}
-        class_body = vars(cls)
-        for name, value in class_body.items():
-            if not name.startswith('_'):
-                if name in parameters:
-                    raise ValueError(f"duplicate name '{name:s}' in class '{cls.__name__:s}'")
-                parameters[name] = value
-
-        if args:
-            unexpected_parameters = set(parameters.keys()) - set(args)
-            if unexpected_parameters:
-                raise ValueError(f"unexpected parameter(s) for '{cls.__name__:s}': "
-                                f"{tuple(unexpected_parameters)!s} ")
-        for name in parameters:
-            delattr(cls, name)
-        return parameters
-
-
-
-    @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        raise NotImplementedError(f"concrete subclass '{cls.__name__:s}'"
-                                  f"must override class method '_init_concrete_subclass'")
-
-    @classmethod
-    def decode(cls, bstr):
-        obj, rest = cls.parse(bstr)
-        if rest != b'':
-            raise ValueError(f"input contains additional data '{rest}'")
-        return obj
-
-    @staticmethod
-    def _is_valid_xdr_name(name):
-        if name in reserved_names:
-            return False
-        return re.match(r'^[A-Za-z][A-Za-z0-9_]*$', name)
-
-
-    @staticmethod
-    def padding(size):
-        return b'\0' * ((4 - size % 4) % 4)
-
-    @staticmethod
-    def padded_size(size):
-        return size + ((4 - size % 4) % 4)
-
-    @staticmethod
-    def remove_padding(bstr, size):
-        if any(b for b in bstr[size:]):
-            raise ValueError("non-zero padding byte(s) encountered: '{bstr[size:].encode('utf8'):s}'")
-        return bstr[:size]
+    def _decode_(cls, bstr):
+        raise NotImplementedError
 
     @classmethod
     def typedef(cls, _xdr_type_name=None, *bases, **kwargs):
@@ -166,50 +220,5 @@ class XdrType(metaclass=_MetaXdrType):
         new_type = cls.__class__(type_name, (cls,) + bases, {}, **kwargs)
         return new_type
 
-
-class XdrAtomic(XdrType):
-    _packed_size = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._abstract:
-            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
-        return super().__new__(cls, *args, **kwargs)
-
-    @classmethod
-    def _validate_arguments(cls, *args, **kwargs):
-        pass  # Validation is best done during instance creation.
-
-    @classmethod
-    def packed_size(cls):
-        return cls._packed_size
-
-
-class Void(XdrType):
-    _final = True
-    _abstract = False
-
-    def __new__(cls, _=None):
-        return super().__new__(cls)
-
-    @classmethod
-    def _validate_arguments(cls):
-        pass
-
-    def encode(self):
-        return b''
-
-    @classmethod
-    def parse(cls, bstr):
-        return cls(), bstr
-
-    def __eq__(self, other):
-        return other is None or isinstance(other, Void)
-
-    def __ne__(self, other):
-        return not self == other
-
-    def __repr__(self):
-        return f"{self.__class__.__name__:s}()"
-
-    def __str__(self):
-        return 'None'
+    def _eq_class(self, other):
+        return type(self) == type(other)

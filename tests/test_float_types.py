@@ -27,13 +27,13 @@ def test_default_instantiation(xdrtype):
     assert isinstance(n, xdrtype)
     assert n == 0.0
     assert n == 0
-    packed = n.encode()
+    packed = xdrlib.encode(n)
     assert len(packed) == (1 + xdrtype.exponent_size + xdrtype.fraction_size) / 8
     assert all(b == 0 for b in packed)
-    unpacked = xdrtype.decode(packed)
+    unpacked = xdrlib.decode(xdrtype, packed)
     assert unpacked == n
     assert isinstance(unpacked, xdrtype)
-    assert unpacked.encode() == packed
+    assert xdrlib.encode(unpacked) == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -49,10 +49,10 @@ def test_instantiation_from_number(xdrtype, param, value):
     n = xdrtype(param)
     assert isinstance(n, xdrtype)
     assert n == pytest.approx(value, precision[xdrtype])
-    packed = n.encode()
-    m = xdrtype.decode(packed)
+    packed = xdrlib.encode(n)
+    m = xdrlib.decode(xdrtype, packed)
     assert isinstance(m, xdrtype)
-    assert m.encode() == packed
+    assert xdrlib.encode(m) == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -70,10 +70,10 @@ def test_instantiation_from_string(xdrtype, param, value):
     assert isinstance(n, xdrtype)
     value = float(value)
     assert n == pytest.approx(value, precision[xdrtype])
-    packed = n.encode()
-    m = xdrtype.decode(packed)
+    packed = xdrlib.encode(n)
+    m = xdrlib.decode(xdrtype, packed)
     assert isinstance(m, xdrtype)
-    assert m.encode() == packed
+    assert xdrlib.encode(m) == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -90,10 +90,10 @@ def test_instantiation_from_bytes(xdrtype, param, value):
     assert isinstance(n, xdrtype)
     value = float(value)
     assert n == pytest.approx(value, precision[xdrtype])
-    packed = n.encode()
-    m = xdrtype.decode(packed)
+    packed = xdrlib.encode(n)
+    m = xdrlib.decode(xdrtype,packed)
     assert isinstance(m, xdrtype)
-    assert m.encode() == packed
+    assert xdrlib.encode(m) == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -171,8 +171,8 @@ def test_encoding_for_Float(value):
     n = xdrlib.Float(value)
     assert n == pytest.approx(value, precision[xdrlib.Float])
     packed = struct.pack('>f', value)
-    assert n.encode() == packed
-    n2 = xdrlib.Float.decode(packed)
+    assert xdrlib.encode(n) == packed
+    n2 = xdrlib.decode(xdrlib.Float, packed)
     assert n2.signbit == n.signbit
     assert n2.exponent == n.exponent
     assert n2.fraction == n.fraction
@@ -196,8 +196,8 @@ def test_encoding_for_Double(value):
     n = xdrlib.Double(value)
     assert n == pytest.approx(value, precision[xdrlib.Double])
     packed = struct.pack('>d', value)
-    assert n.encode() == packed
-    n2 = xdrlib.Double.decode(packed)
+    assert xdrlib.encode(n) == packed
+    n2 = xdrlib.decode(xdrlib.Double, packed)
     assert n2.signbit == n.signbit
     assert n2.exponent == n.exponent
     assert n2.fraction == n.fraction
@@ -217,7 +217,7 @@ def test_maximum_value(xdrtype):
         n = xdrtype(str(max_normal_value))
         assert n.exponent == xdrtype.max_exponent - 1
         assert n.fraction == xdrtype.fraction_mask
-        assert xdrtype.decode(n.encode()) == n
+        assert xdrlib.decode(xdrtype, xdrlib.encode(n)) == n
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -233,11 +233,11 @@ def test_subnormal(xdrtype):
             value = ctx.power(2, - xdrtype.exponent_bias - i)
             n = xdrtype(str(value))
             fraction = 1 << (xdrtype.fraction_size - i - 1)
-            packed = fraction.to_bytes(xdrtype.packed_size(), 'big')
-            assert n.encode() == packed
-            unpacked = xdrtype.decode(packed)
+            packed = fraction.to_bytes(xdrtype.packed_size, 'big')
+            assert xdrlib.encode(n) == packed
+            unpacked = xdrlib.decode(xdrtype, packed)
             assert n == unpacked
-            assert unpacked.encode() == packed
+            assert xdrlib.encode(unpacked) == packed
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -253,7 +253,7 @@ def test_smallest_normal_number(xdrtype):
         n = xdrtype(str(smallest_normal))
         assert n.exponent == 1
         assert n.fraction == 0
-        assert xdrtype.decode(n.encode()) == n
+        assert xdrlib.decode(xdrtype, xdrlib.encode(n)) == n
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -270,7 +270,7 @@ def test_largest_subnormal_number(xdrtype):
         n = xdrtype(str(largest_subnormal))
         assert n.exponent == 0
         assert n.fraction == xdrtype.fraction_mask
-        assert xdrtype.decode(n.encode()) == n
+        assert xdrlib.decode(xdrtype, xdrlib.encode(n)) == n
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -287,7 +287,7 @@ def test_smallest_subnormal_numbers(xdrtype):
         n = xdrtype(str(value))
         assert n.exponent == 0
         assert n.fraction == 1
-        assert xdrtype.decode(n.encode()) == n
+        assert xdrlib.decode(xdrtype, xdrlib.encode(n)) == n
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -304,7 +304,7 @@ def test_correct_rounding_of_half_smallest_subnormal_number(xdrtype):
         n = xdrtype(str(smallest_subnormal))
         assert n.exponent == 0
         assert n.fraction == 1
-        assert xdrtype.decode(n.encode()) == n
+        assert xdrlib.decode(xdrtype, xdrlib.encode(n)) == n
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -515,39 +515,39 @@ def test_float_types_cannot_be_modified(xdrtype):
 def test_optional_float_types(xdrtype):
     Opt = xdrlib.Optional(xdrtype)
 
-    v = Opt()
+    v = Opt(None)
     assert isinstance(v, Opt)
     assert isinstance(v, xdrlib.Void)
     assert not isinstance(v, xdrtype)
     assert v == None
     pv = b'\0\0\0\0'
-    assert v.encode() == pv
-    v1 = Opt.decode(pv)
+    assert xdrlib.encode(v) == pv
+    v1 = xdrlib.decode(Opt, pv)
     assert v1 == v
-    assert v1.encode() == pv
+    assert xdrlib.encode(v1) == pv
 
     r = Opt('3.14')
     assert isinstance(r, Opt)
     assert isinstance(r, xdrtype)
     assert r == xdrtype('3.14')
-    pr = xdrlib.TRUE.encode() + xdrtype('3.14').encode()
-    assert r.encode() == pr
-    r1 = Opt.decode(pr)
+    pr = xdrlib.encode(xdrlib.TRUE) + xdrlib.encode(xdrtype('3.14'))
+    assert xdrlib.encode(r) == pr
+    r1 = xdrlib.decode(Opt, pr)
     assert r1 == r
-    assert r1.encode() == pr
+    assert xdrlib.encode(r1) == pr
 
 
 def test_anonymous_float_types():
     from xdrlib2.xdr_float import XdrFloat
-    Float8 = XdrFloat(exponent_size=3, fraction_size=4)
+    Float8 = XdrFloat.typedef(exponent_size=3, fraction_size=4)
     n = Float8(0.75)
     assert isinstance(n, Float8)
     assert isinstance(n, XdrFloat)
     assert isinstance(n, float)
     assert n == 0.75
     p = b'\x28\0\0\0'
-    assert n.encode() == p
-    n1 = Float8.decode(p)
+    assert xdrlib.encode(n) == p
+    n1 = xdrlib.decode(Float8, p)
     assert n1 == n
-    assert n1.encode() == p
+    assert xdrlib.encode(n1) == p
 

@@ -6,11 +6,41 @@ import pytest
 import xdrlib2 as xdrlib
 from xdrlib2.xdr_integer import XdrInteger
 
-def test_default_instantiation():
-    assert xdrlib.Integer() == 0
-    assert xdrlib.UnsignedInteger() == 0
-    assert xdrlib.Hyper() == 0
-    assert xdrlib.UnsignedHyper() == 0
+
+@pytest.mark.parametrize("xdrtype", [
+    xdrlib.Integer,
+    xdrlib.UnsignedInteger,
+    xdrlib.Hyper,
+    xdrlib.UnsignedHyper
+])
+def test_default_instantiation(xdrtype):
+    assert xdrtype() == 0
+
+
+@pytest.mark.parametrize("xdrtype,min,max,signed,packed_size", [
+    (xdrlib.Integer, -2**31, 2**31, True, 4),
+    (xdrlib.UnsignedInteger, 0, 2**32, False, 4),
+    (xdrlib.Hyper, -2**63, 2**63, True, 8),
+    (xdrlib.UnsignedHyper, 0, 2**64, False, 8),
+])
+def test_integer_type_parameters(xdrtype, min, max, signed, packed_size):
+    assert xdrtype.min == min
+    assert xdrtype.max == max
+    assert xdrtype.signed == signed
+    assert xdrtype.packed_size == packed_size
+
+
+@pytest.mark.parametrize("xdrtype", [
+    xdrlib.Integer,
+    xdrlib.UnsignedInteger,
+    xdrlib.Hyper,
+    xdrlib.UnsignedHyper
+])
+def test_parameter_modification_fails_for_final_types(xdrtype):
+    with pytest.raises(AttributeError):
+        xdrtype.min = 13
+    with pytest.raises(AttributeError):
+        del xdrtype.max
 
 
 @pytest.mark.parametrize("xdrtype,values", [
@@ -34,7 +64,7 @@ def test_valid_values(xdrtype, values):
 ])
 def test_invalid_values(xdrtype, values):
     for v in values:
-        with pytest.raises(ValueError):
+        with pytest.raises(OverflowError):
             xdrtype(v)
 
 
@@ -52,28 +82,17 @@ def test_invalid_values(xdrtype, values):
 ])
 def test_packing_and_unpacking(xdrtype, values, packed):
     for v, p in zip(values, packed):
-        assert xdrtype(v).encode() == p
-        x = xdrtype.decode(p)
+        x = xdrtype(v)
         assert x == v
-        assert isinstance(x, xdrtype)
-
-@pytest.mark.parametrize('xdrtype', [
-    xdrlib.Integer,
-    xdrlib.UnsignedInteger,
-    xdrlib.Hyper,
-    xdrlib.UnsignedHyper
-])
-def test_cannot_modify_parameters_of_integer_types(xdrtype):
-    with pytest.raises(AttributeError):
-        xdrtype.new_attribute = 3
-    with pytest.raises(AttributeError):
-        xdrtype._max = 0
-    with pytest.raises(AttributeError):
-        del xdrtype._min
+        assert xdrlib.encode(x) == p
+        y = xdrlib.decode(xdrtype, p)
+        assert x == y
+        assert isinstance(y, xdrtype)
+        assert xdrlib.encode(y) == p
 
 
 def test_anonymous_subclass():
-    i_bit = XdrInteger(min=0, max=2)
+    i_bit = XdrInteger.typedef(min=0, max=2)
     assert issubclass(i_bit, XdrInteger)
     assert issubclass(i_bit, int)
     zero = i_bit(0)
@@ -82,28 +101,28 @@ def test_anonymous_subclass():
     assert isinstance(one, i_bit)
     assert zero == 0
     assert one == 1
-    assert zero.encode() == b'\0\0\0\0'
-    assert one.encode() == b'\x01\0\0\0'
-    new_zero = i_bit.decode(b'\0\0\0\0')
-    new_one = i_bit.decode(b'\x01\0\0\0')
+    assert xdrlib.encode(zero) == b'\0\0\0\0'
+    assert xdrlib.encode(one) == b'\x01\0\0\0'
+    new_zero = xdrlib.decode(i_bit, b'\0\0\0\0')
+    new_one = xdrlib.decode(i_bit, b'\x01\0\0\0')
     assert new_zero == zero
     assert new_one == one
     assert isinstance(new_zero, i_bit)
     assert isinstance(new_one, i_bit)
-    assert new_zero.encode() == b'\0\0\0\0'
-    assert new_one.encode() == b'\x01\0\0\0'
+    assert xdrlib.encode(new_zero) == b'\0\0\0\0'
+    assert xdrlib.encode(new_one) == b'\x01\0\0\0'
 
 def test_anonymous_subclass_error_situations():
-    i_bit = XdrInteger(min=0, max=2)
-    with pytest.raises(ValueError):
+    i_bit = XdrInteger.typedef(min=0, max=2)
+    with pytest.raises(OverflowError):
         i_bit(2)
     with pytest.raises(TypeError):
-        xdrlib.Integer(min=0, max=2)
+        xdrlib.Integer.typedef(min=0, max=2)
     with pytest.raises(TypeError):
-        XdrInteger(min=3)
+        XdrInteger.typedef(min=3)
     with pytest.raises(TypeError):
-        XdrInteger(min=3, max=5, extra=7)
+        XdrInteger.typedef(min=3, max=5, extra=7)
     with pytest.raises(ValueError):
-        XdrInteger(min=2, max=0)
+        XdrInteger.typedef(min=2, max=0)
 
 
