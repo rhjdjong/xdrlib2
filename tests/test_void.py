@@ -19,8 +19,8 @@ def test_void_instantiation():
 
 def test_void_encoding_and_decoding():
     v = xdrlib.Void()
-    assert v.encode() == b''
-    v2 = xdrlib.Void.decode(b'')
+    assert v._encode_() == b''
+    v2 = xdrlib.decode(xdrlib.Void, b'')
     assert isinstance(v2, xdrlib.Void)
     assert v2 == v
-    assert v2.encode() == b''
+    assert v2._encode_() == b''

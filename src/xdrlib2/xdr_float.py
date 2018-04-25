@@ -2,7 +2,7 @@
 # This file is part of the xdrlib2 project which is released under the MIT license.
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
-from .xdr_core import XdrAtomic, _xdr_mode, xdr_padded, xdr_remove_padding
+from .xdr_core import XdrType, xdr_mode, xdr_padded, xdr_split_and_remove_padding
 from .xdr_integer import XdrInteger
 import numbers
 import re
@@ -10,12 +10,18 @@ import math
 import operator
 
 
-class XdrFloat(XdrAtomic, float):
-    _mode = _xdr_mode.ABSTRACT
-    _final = False
-    _abstract = True
+class XdrFloat(XdrType, float):
+    _mode = xdr_mode.ABSTRACT
     _parameters = ('exponent_size', 'fraction_size')
-    _float_parameters = {}
+    _xdr_parameters = {'exponent_size': None,
+                       'fraction_size': None,
+                       'max_exponent': None,
+                       'exponent_bias': None,
+                       'fraction_mask': None,
+                       'signbit_class': None,
+                       'exponent_class': None,
+                       'fraction_class': None,
+                       'packed_size': None}
 
     _spec_re = re.compile(r'^[+-]?(?:(?P<inf>inf(?:inity)?)|(?P<nan>nan)(?P<payload>\d*))$')
     _nstr_pointfloat_re = re.compile(r'^[+-]?(?P<intpart>\d*)\.(?P<decpart>\d*)$')
@@ -24,46 +30,22 @@ class XdrFloat(XdrAtomic, float):
 
     def __init_subclass__(cls, **kwargs):
         parameters = cls._get_class_parameters(**kwargs)
-        if cls._mode is _xdr_mode.FINAL:
-            if parameters:
+        if parameters:
+            if cls._mode is xdr_mode.FINAL:
                 raise TypeError(f"cannot subclass final type "
                                 f"'{cls.__name__:s}' with modifications.")
-        if cls._mode is _xdr_mode.ABSTRACT:
-            cls._init_abstract_subclass_(**parameters)
-        else:
-            cls._init_concrete_subclass_(**parameters)
-
-    @classmethod
-    def _init_abstract_subclass_(cls, **kwargs):
-        if kwargs:
-            cls._float_parameters = {}
-            cls._float_parameters.update(cls._float_parameters)
-            for name in cls._parameters:
-                if name in kwargs:
-                    if name in cls._float_parameters:
-                        raise TypeError(f"class '{cls.__name__:s}': redefinition of "
-                                        f"class parameter '{name:s}' to {kwargs[name]!s}")
-                    cls._float_parameters[name] = int(kwargs.pop(name))
-            if kwargs:
-                raise TypeError(f"unexpected class parameter(s) {kwargs!s} for class '{cls.__name__:s}'")
-            missing_parameters = set(cls._parameters) - set(cls._float_parameters.keys())
+            xdr_parameters = cls._xdr_parameters.copy()
+            extra_names = parameters.keys() - cls._parameters
+            if extra_names:
+                raise TypeError(f"unexpected class parameter(s) {extra_names!s} "
+                                f"for class '{cls.__name__:s}'")
+            missing_parameters = cls._parameters - xdr_parameters.keys()
             if missing_parameters:
                 raise TypeError(f"missing class parameters {missing_parameters!s} "
                                 f"for class '{cls.__name__:s}'")
-            # parameters = cls._get_class_parameters(**kwargs)
-            # extra_names = set(parameters.keys()) - set(cls._parameters)
-            # if extra_names:
-            #     raise ValueError(f"{cls.__name__:s}' subclass got unexpected parameter(s) {tuple(extra_names)!s}")
-            # if cls._final:
-            #     if parameters:
-            #         # This is subclassing a concrete type with additional or modified parameters
-            #         raise TypeError(f"cannot subclass '{cls.__name__:s}' type with modifications")
-            #     return
-            #
-            # if cls._abstract:
-            # if not all(parameters.get(n) is not None for n in cls._parameters):
-            #     raise TypeError(f"incomplete instantiation of XdrInteger subclass '{cls.__name__:s}'")
-            # if cls._parameters:
+            cls._xdr_parameters = xdr_parameters
+            cls._xdr_parameters.update(parameters)
+
             exponent_size = cls.exponent_size
             fraction_size = cls.fraction_size
             if exponent_size < 1:
@@ -74,15 +56,13 @@ class XdrFloat(XdrAtomic, float):
             exponent_bias = max_exponent >> 1
             fraction_mask = (1 << fraction_size) - 1
 
-            cls._float_parameters['exponent_size'] = exponent_size
-            cls._float_parameters['fraction_size'] = fraction_size
-            cls._float_parameters['max_exponent'] = max_exponent
-            cls._float_parameters['exponent_bias'] = exponent_bias
-            cls._float_parameters['fraction_mask'] = fraction_mask
+            cls.max_exponent = max_exponent
+            cls.exponent_bias = exponent_bias
+            cls.fraction_mask = fraction_mask
 
-            cls._float_parameters['signbit_class'] = XdrInteger.typedef(min=0, max=2)
-            cls._float_parameters['exponent_class'] = XdrInteger.typedef(min=0, max=1<<exponent_size)
-            cls._float_parameters['fraction_class'] = XdrInteger.typedef(min=0, max=1<<fraction_size)
+            cls.signbit_class = XdrInteger.typedef(min=0, max=2)
+            cls.exponent_class = XdrInteger.typedef(min=0, max=1<<exponent_size)
+            cls.fraction_class = XdrInteger.typedef(min=0, max=1<<fraction_size)
 
             bit_size = 1 + exponent_size + fraction_size
             packed_size = bit_size // 8
@@ -90,60 +70,61 @@ class XdrFloat(XdrAtomic, float):
                 raise ValueError(f'Sign bit (1), exponent size ({cls.exponent_size:d}) '
                                  f'and fraction size ({cls.fraction_size:d}) '
                                  f'together are not a multiple of 8 bits')
-            cls._packed_size = packed_size
-            cls._mode = _xdr_mode.FINAL
+            cls.packed_size = packed_size
+            cls._mode = xdr_mode.FINAL
 
     def __new__(cls, *args, **kwargs):
-        if cls._mode is _xdr_mode.ABSTRACT:
-            if args:
-                raise ValueError(f"Cannot instantiate abstract class {cls.__name__:s} for {args!s}")
-            return cls.typedef(**kwargs)
-        else:  # Concrete class instantiation
-            if len(args) == 3:
-                signbit, exponent, fraction = args
-            elif len(args) <= 1:
-                arg = args[0] if args else 0.0
-                if isinstance(arg, XdrFloat):
-                    signbit, exponent, fraction = cls._extract_from_xdr_instance(arg)
-                elif isinstance(arg, numbers.Real):
-                    signbit, exponent, fraction = cls._extract_from_number(arg)
-                elif isinstance(arg, str):
-                    signbit, exponent, fraction = cls._extract_from_string(arg)
-                elif isinstance(arg, bytes):
-                    signbit, exponent, fraction = cls._extract_from_string(arg.decode('utf8'))
-                else:
-                    raise TypeError(f"{cls.__name__:s} argument must be a string or a number, "
-                                    f"not '{arg.__class__.__name__:s}'")
-            else:
-                raise TypeError(f"Invalid number of arguments for instantiation of '{cls.__name__:s}'")
+        if cls._mode is xdr_mode.ABSTRACT:
+            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
 
-            if exponent == cls.max_exponent:
-                if fraction == 0:
-                    value = '-inf' if signbit else 'inf'
-                else:
-                    value = '-nan' if signbit else 'nan'
-            elif exponent == 0:
-                if fraction == 0:
-                    value = -0.0 if signbit else 0.0
-                else:
-                    value = (-1 if signbit else 1) * fraction * 2 ** (1 - cls.exponent_bias - cls.fraction_size)
+        if len(args) == 3:
+            signbit, exponent, fraction = args
+        elif len(args) <= 1:
+            arg = args[0] if args else 0.0
+            if isinstance(arg, XdrFloat):
+                signbit, exponent, fraction = cls._extract_from_xdr_instance(arg)
+            elif isinstance(arg, numbers.Real):
+                signbit, exponent, fraction = cls._extract_from_number(arg)
+            elif isinstance(arg, str):
+                signbit, exponent, fraction = cls._extract_from_string(arg)
+            elif isinstance(arg, bytes):
+                signbit, exponent, fraction = cls._extract_from_string(arg.decode('utf8'))
             else:
-                try:
-                    value = (-1 if signbit else 1) * (1 + fraction * 2 ** (-cls.fraction_size)) \
-                            * 2 ** (exponent - cls.exponent_bias)
-                except OverflowError:
-                    value = '-inf' if signbit else 'inf'
+                raise TypeError(f"{cls.__name__:s} argument must be a string or a number, "
+                                f"not '{arg.__class__.__name__:s}'")
+        else:
+            raise TypeError(f"Invalid number of arguments for instantiation of '{cls.__name__:s}'")
 
-            instance = super().__new__(cls, value, **kwargs)
-            instance._signbit = cls.signbit_class(signbit)
-            instance._exponent = cls.exponent_class(exponent)
-            instance._fraction = cls.fraction_class(fraction)
-            return instance
+        if exponent == cls.max_exponent:
+            if fraction == 0:
+                value = '-inf' if signbit else 'inf'
+            else:
+                value = '-nan' if signbit else 'nan'
+        elif exponent == 0:
+            if fraction == 0:
+                value = -0.0 if signbit else 0.0
+            else:
+                value = (-1 if signbit else 1) * fraction * 2 ** (1 - cls.exponent_bias - cls.fraction_size)
+        else:
+            try:
+                value = (-1 if signbit else 1) * (1 + fraction * 2 ** (-cls.fraction_size)) \
+                        * 2 ** (exponent - cls.exponent_bias)
+            except OverflowError:
+                value = '-inf' if signbit else 'inf'
+
+        instance = super().__new__(cls, value, **kwargs)
+        instance._signbit = cls.signbit_class(signbit)
+        instance._exponent = cls.exponent_class(exponent)
+        instance._fraction = cls.fraction_class(fraction)
+        return instance
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     @classmethod
     def _getattr_(cls, name):
         try:
-            return cls._float_parameters[name]
+            return cls._xdr_parameters[name]
         except KeyError:
             return super()._getattr_(name)
 
@@ -318,7 +299,7 @@ class XdrFloat(XdrAtomic, float):
     def real(self):
         return self
 
-    def encode(self):
+    def _encode_(self):
         packed_number = self.signbit
         packed_number <<= self.exponent_size
         packed_number |= self.exponent
@@ -328,9 +309,9 @@ class XdrFloat(XdrAtomic, float):
         return xdr_padded(bstr)
 
     @classmethod
-    def parse(cls, bstr):
+    def _decode_(cls, bstr):
         size = cls.packed_size
-        vstr, bstr = xdr_remove_padding(bstr, size)
+        vstr, bstr = xdr_split_and_remove_padding(bstr, size)
         packed_integer = int.from_bytes(vstr, 'big')
         fraction = packed_integer & cls.fraction_mask
         packed_integer >>= cls.fraction_size

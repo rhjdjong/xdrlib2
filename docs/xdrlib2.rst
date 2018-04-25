@@ -30,7 +30,7 @@ offer the following methods:
 Numeric types
 -------------
 
-The following numeric types can be instantiated with an optional
+The following numeric types can be instantiated with an Optional
 integer argument. Their default value when instantiated is 0.
 
 .. class:: Int32(v=0)

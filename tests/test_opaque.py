@@ -22,12 +22,12 @@ def test_fixed_length_opaque_through_argument():
     x = MyFixedOpaque(byte_seq)
     assert isinstance(x, MyFixedOpaque)
     assert x == byte_seq
-    p = x.encode()
+    p = xdrlib.encode(x)
     assert p == byte_seq + b'\0\0'
-    n = MyFixedOpaque.decode(p)
+    n = xdrlib.decode(MyFixedOpaque, p)
     assert isinstance(n, MyFixedOpaque)
     assert n == x
-    assert n.encode() == p
+    assert xdrlib.encode(n) == p
 
 
 @pytest.mark.parametrize('xdrtype', [
@@ -39,12 +39,12 @@ def test_var_length_opaque_through_argument(xdrtype):
     x = xdrtype(byte_seq)
     assert isinstance(x, xdrtype)
     assert x == byte_seq
-    p = x.encode()
+    p = xdrlib.encode(x)
     assert p == b'\0\0\0\x0a' + byte_seq + b'\0\0'
-    n = xdrtype.decode(p)
+    n = xdrlib.decode(xdrtype, p)
     assert isinstance(n, xdrtype)
     assert n == x
-    assert n.encode() == p
+    assert xdrlib.encode(n) == p
 
 
 def test_default_instantiation_fixed_opaque_has_all_zero_bytes():
@@ -60,7 +60,7 @@ def test_default_instantiation_fixed_opaque_has_all_zero_bytes():
 def test_default_instantiation_variable_is_empty_bytes(xdrtype):
     x = xdrtype()
     assert x == b''
-    assert x.encode() == b'\0\0\0\0'
+    assert xdrlib.encode(x) == b'\0\0\0\0'
 
 
 def test_fixed_length_instantiation_fails_with_wrong_sized_argument():
@@ -84,14 +84,14 @@ def test_subclassing_without_changes_works():
 
 def test_modifying_size_fails():
     with pytest.raises(AttributeError):
-        MyFixedOpaque._size = 5
+        MyFixedOpaque.size = 5
 
 
 def test_substring_replacement_works_for_fixed_size_opaque():
     b = MyFixedOpaque(b'abcdefghij')
     b[3:5] = b'xy'
     assert b == b'abcxyfghij'
-    assert b.encode() == b'abcxyfghij' + b'\0\0'
+    assert xdrlib.encode(b) == b'abcxyfghij' + b'\0\0'
 
 
 def test_modifying_length_fails_for_fixed_size_opaque():
@@ -126,10 +126,10 @@ def test_substring_modification_works_for_variable_length(xdrtype):
     assert b == b'abcxyz12'
     b[-1] = 0x33
     assert b == b'abcxyz13'
-    assert b.encode() == b'\0\0\0\x08' b'abcxyz13'
+    assert xdrlib.encode(b) == b'\0\0\0\x08' b'abcxyz13'
     del b[1:6]
     assert b == b'a13'
-    assert b.encode() == b'\0\0\0\x03' b'a13' b'\0'
+    assert xdrlib.encode(b) == b'\0\0\0\x03' b'a13' b'\0'
     b += b'56'
     assert b == b'a1356'
     b *= 2
@@ -213,16 +213,16 @@ def test_optional_fixed_length_opaque():
     assert isinstance(yes, optType)
     assert yes == byte_str
     assert no == None
-    pyes = xdrlib.TRUE.encode() + byte_str + b'\0\0\0'
-    pno = xdrlib.FALSE.encode()
-    assert yes.encode() == pyes
-    assert no.encode() == pno
-    yes2 = optType.decode(pyes)
+    pyes = xdrlib.encode(xdrlib.TRUE) + byte_str + b'\0\0\0'
+    pno = xdrlib.encode(xdrlib.FALSE)
+    assert xdrlib.encode(yes) == pyes
+    assert xdrlib.encode(no) == pno
+    yes2 = xdrlib.decode(optType, pyes)
     assert yes2 == yes
-    assert yes2.encode() == pyes
-    no2 = optType.decode(pno)
+    assert xdrlib.encode(yes2) == pyes
+    no2 = xdrlib.decode(optType, pno)
     assert no2 == no
-    assert no2.encode() == pno
+    assert xdrlib.encode(no2) == pno
 
 
 @pytest.mark.parametrize('seqtype', [
@@ -240,13 +240,13 @@ def test_optional_variable_length_opaque(seqtype):
     assert isinstance(no, xdrlib.Void)
     assert yes == byte_str
     assert no == None
-    pyes = xdrlib.TRUE.encode() + b'\0\0\0\x04' + byte_str
-    pno = xdrlib.FALSE.encode()
-    assert yes.encode() == pyes
-    assert no.encode() == pno
-    yes2 = optType.decode(pyes)
+    pyes = xdrlib.encode(xdrlib.TRUE) + b'\0\0\0\x04' + byte_str
+    pno = xdrlib.encode(xdrlib.FALSE)
+    assert xdrlib.encode(yes) == pyes
+    assert xdrlib.encode(no) == pno
+    yes2 = xdrlib.decode(optType, pyes)
     assert yes2 == yes
-    assert yes2.encode() == pyes
-    no2 = optType.decode(pno)
+    assert xdrlib.encode(yes2) == pyes
+    no2 = xdrlib.decode(optType, pno)
     assert no2 == no
-    assert no2.encode() == pno
+    assert xdrlib.encode(no2) == pno

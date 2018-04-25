@@ -38,10 +38,18 @@ def test_struct_initialization():
 def test_struct_encoding_and_decoding():
     m = MyStruct(3, b'hello', 0)
     packed = b'\0\0\0\x03' b'\0\0\0\x05hello\0\0\0' b'\0\0\0\0'
-    assert m.encode() == packed
-    n = MyStruct.decode(packed)
+    assert xdrlib.encode(m) == packed
+    n = xdrlib.decode(MyStruct, packed)
     assert n == m
-    assert n.encode() == packed
+    assert xdrlib.encode(n) == packed
+
+
+def test_struct_class_attribute_gives_field_type():
+    assert MyStruct.a is xdrlib.Integer
+
+
+def test_struct_class_indexing_gives_field_type():
+    assert MyOtherStruct['y'] is xdrlib.Hyper
 
 
 def test_struct_field_modification():
@@ -51,7 +59,7 @@ def test_struct_field_modification():
     n.y = 4
     assert n.y == 4
     packed = b'\0\0\0\x01' b'\0\0\0\0\0\0\0\x04'
-    assert n.encode() == packed
+    assert xdrlib.encode(n) == packed
 
 
 def test_struct_field_deletion_fails():
@@ -89,18 +97,18 @@ def test_optional_struct():
     assert yes.c == 0
     py = b'\0\0\0\x01' b'\0\0\0\x03' b'\0\0\0\x05hello\0\0\0' b'\0\0\0\0'
     pn = b'\0\0\0\0'
-    assert yes.encode() == py
-    assert no.encode() == pn
-    nyes = opt_type.decode(py)
+    assert xdrlib.encode(yes) == py
+    assert xdrlib.encode(no) == pn
+    nyes = xdrlib.decode(opt_type, py)
     assert nyes == yes
-    assert nyes.encode() == py
-    nno = opt_type.decode(pn)
+    assert xdrlib.encode(nyes) == py
+    nno = xdrlib.decode(opt_type, pn)
     assert nno == no
-    assert nno.encode() == pn
+    assert xdrlib.encode(nno) == pn
 
 
 def test_struct_with_optional_field():
-    m = xdrlib.Struct(a=xdrlib.Integer, b=xdrlib.Optional(xdrlib.Double), c=xdrlib.Boolean)
+    m = xdrlib.Struct.typedef(a=xdrlib.Integer, b=xdrlib.Optional(xdrlib.Double), c=xdrlib.Boolean)
     m1 = m(1, 3.14, True)
     m2 = m(1, None, True)
     assert isinstance(m1.b, xdrlib.Optional)
@@ -109,37 +117,37 @@ def test_struct_with_optional_field():
     assert isinstance(m2.b, xdrlib.Optional)
     assert isinstance(m2.b, xdrlib.Void)
     assert m2.b == None
-    p1 = b'\0\0\0\x01' + b'\0\0\0\x01' + xdrlib.Double(3.14).encode() + b'\0\0\0\x01'
+    p1 = b'\0\0\0\x01' + b'\0\0\0\x01' + xdrlib.encode(xdrlib.Double(3.14)) + b'\0\0\0\x01'
     p2 = b'\0\0\0\x01' + b'\0\0\0\0' + b'\0\0\0\x01'
-    assert m1.encode() == p1
-    assert m2.encode() == p2
-    n1 = m.decode(p1)
-    n2 = m.decode(p2)
+    assert xdrlib.encode(m1) == p1
+    assert xdrlib.encode(m2) == p2
+    n1 = xdrlib.decode(m, p1)
+    n2 = xdrlib.decode(m, p2)
     assert n1 == m1
     assert n2 == m2
-    assert n1.encode() == p1
-    assert n2.encode() == p2
+    assert xdrlib.encode(n1) == p1
+    assert xdrlib.encode(n2) == p2
 
 
 def test_struct_with_self_reference():
-    with xdrlib.Struct() as SelfRefStruct:
+    with xdrlib.Struct.typedef() as SelfRefStruct:
         SelfRefStruct.x = xdrlib.Integer
         SelfRefStruct.link = xdrlib.Optional(SelfRefStruct)
     a = SelfRefStruct(x=3, link=None)
     b = SelfRefStruct(x=4, link=a)
     c = SelfRefStruct(x=5, link=b)
-    pa = xdrlib.Integer(3).encode() + xdrlib.FALSE.encode()
-    pb = xdrlib.Integer(4).encode() + xdrlib.TRUE.encode() + pa
-    pc = xdrlib.Integer(5).encode() + xdrlib.TRUE.encode() + pb
-    assert a.encode() == pa
-    assert b.encode() == pb
-    assert c.encode() == pc
-    na = SelfRefStruct.decode(pa)
-    nb = SelfRefStruct.decode(pb)
-    nc = SelfRefStruct.decode(pc)
+    pa = xdrlib.encode(xdrlib.Integer(3)) + xdrlib.encode(xdrlib.FALSE)
+    pb = xdrlib.encode(xdrlib.Integer(4)) + xdrlib.encode(xdrlib.TRUE) + pa
+    pc = xdrlib.encode(xdrlib.Integer(5)) + xdrlib.encode(xdrlib.TRUE) + pb
+    assert xdrlib.encode(a) == pa
+    assert xdrlib.encode(b) == pb
+    assert xdrlib.encode(c) == pc
+    na = xdrlib.decode(SelfRefStruct, pa)
+    nb = xdrlib.decode(SelfRefStruct, pb)
+    nc = xdrlib.decode(SelfRefStruct, pc)
     assert na == a
     assert nb == b
     assert nc == c
-    assert na.encode() == pa
-    assert nb.encode() == pb
-    assert nc.encode() == pc
+    assert xdrlib.encode(na) == pa
+    assert xdrlib.encode(nb) == pb
+    assert xdrlib.encode(nc) == pc

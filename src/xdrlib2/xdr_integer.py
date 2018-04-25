@@ -3,96 +3,75 @@
 # See https://github.com/rhjdjong/xdrlib2 for details.
 
 from .xdr_core import (
-    XdrAtomic,
+    XdrType,
     XDR_BYTE_ORDER,
-    _xdr_mode,
+    xdr_mode,
     xdr_padded,
-    xdr_remove_padding,
+    xdr_split_and_remove_padding,
 )
 
 
-class XdrInteger(XdrAtomic, int):
-    _mode = _xdr_mode.ABSTRACT
+class XdrInteger(XdrType, int):
+    _mode = xdr_mode.ABSTRACT
     _parameters = ('min', 'max')
-    _integer_parameters = {}
+    _xdr_parameters = {'min': None,
+                       'max': None,
+                       'signed': None,
+                       'packed_size': None}
 
     def __init_subclass__(cls, **kwargs):
         parameters = cls._get_class_parameters(**kwargs)
-        if cls._mode is _xdr_mode.FINAL:
-            if parameters:
+        if parameters:
+            if cls._mode is xdr_mode.FINAL:
                 raise TypeError(f"cannot subclass final type "
                                 f"'{cls.__name__:s}' with modifications.")
-        if cls._mode is _xdr_mode.ABSTRACT:
-            cls._init_abstract_subclass_(**parameters)
-        else:
-            cls._init_concrete_subclass_(**parameters)
-
-    @classmethod
-    def _init_abstract_subclass_(cls, **kwargs):
-        if kwargs:
-            cls._integer_parameters = {}
-            cls._integer_parameters.update(cls._integer_parameters)
-            for name in cls._parameters:
-                if name in kwargs:
-                    if name in cls._integer_parameters:
-                        raise TypeError(f"class '{cls.__name__:s}': redefinition of "
-                                        f"class parameter '{name:s}' to {kwargs[name]!s}")
-                    cls._integer_parameters[name] = int(kwargs.pop(name))
-            if kwargs:
-                raise TypeError(f"unexpected class parameter(s) {kwargs!s} for class '{cls.__name__:s}'")
-            missing_parameters = set(cls._parameters) - set(cls._integer_parameters.keys())
+            xdr_parameters = cls._xdr_parameters.copy()
+            extra_names = parameters.keys() - cls._parameters
+            if extra_names:
+                raise TypeError(f"unexpected class parameter(s) {extra_names!s} "
+                                f"for class '{cls.__name__:s}'")
+            missing_parameters = cls._parameters - xdr_parameters.keys()
             if missing_parameters:
                 raise TypeError(f"missing class parameters {missing_parameters!s} "
                                 f"for class '{cls.__name__:s}'")
+            cls._xdr_parameters = xdr_parameters
+            cls._xdr_parameters.update(parameters)
+
             if cls.max <= cls.min:
                 raise ValueError(f"{cls.__name__:s}: minimum value ({cls.min:d}) "
                                  f"must be less than maximum value ({cls.max:d})")
-            cls._integer_parameters['signed'] = cls.min < 0
+            cls.signed = cls.min < 0
             size = (cls.max - cls.min).bit_length() - 1
-            cls._packed_size = size // 8 + (1 if size % 8 else 0)
-            cls._mode = _xdr_mode.FINAL
+            cls.packed_size = size // 8 + (1 if size % 8 else 0)
+            cls._mode = xdr_mode.FINAL
 
-    @classmethod
-    def _init_concrete_subclass(cls, **kwargs):
-        pass
+    def __new__(cls, *args, **kwargs):
+        if cls._mode is xdr_mode.ABSTRACT:
+            raise NotImplementedError(f"cannot instantiate abstract '{cls.__name__:s}' class")
 
-    def __new__(cls, value=None, **kwargs):
-        if cls._mode is _xdr_mode.ABSTRACT:
-            if value:
-                raise NotImplementedError(f"Cannot instantiate abstract class {cls.__name__:s}'")
-            return cls.typedef(**kwargs)
-        else:  # Concrete class instantiation
-            if value is None:
-                value = 0
-            v = super().__new__(cls, value, **kwargs)
-            if cls.min <= v < cls.max:
-                return v
-            raise ValueError(f"Value {value!r} is out of range for class {cls.__name__}.\n"
-                             f"\tAllowed range is {cls.min:d} <= value < {cls.max:d}.")
+        instance = super().__new__(cls, *args, **kwargs)
+        if cls.min <= instance < cls.max:
+            return instance
+        else:
+            raise OverflowError(f"Value {instance!r} is out of range for class {cls.__name__}.\n"
+                                f"\tAllowed range is {cls.min:d} <= value < {cls.max:d}.")
 
-    @classmethod
-    def _getattr_(cls, name):
-        try:
-            return cls._integer_parameters[name]
-        except KeyError:
-            return super()._getattr_(name)
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
-    def encode(self):
+    def _encode_(self):
         bstr = self.to_bytes(self.packed_size, XDR_BYTE_ORDER, signed=self.signed)
         return xdr_padded(bstr)
 
     @classmethod
-    def parse(cls, bstr):
+    def _decode_(cls, bstr):
         size = cls.packed_size
-        v_str, bstr = xdr_remove_padding(bstr, size)
+        v_str, bstr = xdr_split_and_remove_padding(bstr, size)
         v = int.from_bytes(v_str, XDR_BYTE_ORDER, signed=cls.signed)
         return cls(v), bstr
 
     def __repr__(self):
         return f'{self.__class__.__name__:s}({super().__repr__():s})'
-
-    def __str__(self):
-        return super().__str__()
 
 
 Int32 = XdrInteger.typedef('Int32', min=-1<<31, max=1<<31)
