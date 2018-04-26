@@ -38,7 +38,7 @@ class Union(XdrType):
             void;
         }
 
-    >>> from xdrlib2 import Union, String, Boolean, Void
+    >>> from xdrlib2 import Union, Integer, String, Boolean, Void
     >>> datatype = Union.typedef('datatype', kind=Integer)
 
     The various union arms are defined via the 'case' and 'default' methods on the derived class

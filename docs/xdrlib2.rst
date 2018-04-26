@@ -1,54 +1,116 @@
 .. Copyright (c) 2018 Ruud de Jong
-   This file is part of the xdrlib2 project which is released under the MIT license.
+   This file is part of the xdrlib2 project
+   which is released under the MIT license.
    See https://github.com/rhjdjong/xdrlib2 for details.
 
 ===============
 Module contents
 ===============
 
-XDR Types
-=========
+*********
+Functions
+*********
 
-General
--------
+The :mod:`xdrlib2` module offers the following generic functions
+that can be used on all XDR types:
 
-All type classes in :mod:`xdrlib2`, as well as user-defined classes derived from these,
-offer the following methods:
+.. autofunction:: xdrlib2.encode
+.. autofunction:: xdrlib2.decode
 
-.. method:: encode
 
-   `xdrobj.encode()` returns the byte representation of the XDR encoding of the
-   value of `xdrobj`.
+*******
+Classes
+*******
 
-.. classmethod:: decode
+.. autoclass:: xdrlib2.XdrType
 
-   `xdrcls.decode(bytestring)` returns an instantiation of class :class:`xdrcls`
-   with the value as encoded in the `bytestring` argument.
-   It raises a :exc:`ValueError` if the bytes in `bytestring`
-   do not represent a valid value for the class :class:`xdrcls`.
+Integer types
+=============
 
-Numeric types
--------------
+.. autoclass:: xdrlib2.XdrInteger
 
-The following numeric types can be instantiated with an Optional
-integer argument. Their default value when instantiated is 0.
+The following concrete integer subclasses are provided:
 
-.. class:: Int32(v=0)
+.. class:: xdrlib2.Int32
+.. class:: xdrlib2.Integer
 
-   This is the implementation of the `int` type in the XDR specification.
+   .. attribute:: min = -2147483648
+   .. attribute:: max = 2147483648
+   .. attribute:: signed = True
+   .. attribute:: packed_size = 4
 
-.. class:: Int32u(v=0)
+   These are concrete signed integer subclasses
+   that have an encoding size of 4 bytes.
+   They accept values
+   between -2\ :sup:`31` (-2147483648) inclusive and
+   2\ :sup:`31` (2147483648) exclusive.
 
-   This is the implementation of the `unsigned int` type in the XDR specifcation.
+   :class:`xdrlib2.Integer` is an alias of :class:`xdrlib2.Int32`
 
-.. class:: Int64(v=0)
 
-   This is the implementation of the `hyper` type in the XDR specifcation.
+.. class:: xdrlib2.Int32u
+.. class:: xdrlib2.UnsignedInteger
 
-.. class:: Int64u(v=0)
+   .. attribute:: min = 0
+   .. attribute:: max = 4294967296
+   .. attribute:: signed = False
+   .. attribute:: packed_size = 4
 
-   This is the implementation of the `unsigned hyper` type in the XDR specification.
+   These are concrete unsigned integer subclasses
+   that have an encoding size of 4 bytes.
+   They accept values
+   between 0 inclusive and
+   2\ :sup:`32` (4294967296) exclusive.
 
+   :class:`xdrlib2.UnsignedInteger` is an alias of :class:`xdrlib2.Int32u`
+
+
+.. class:: xdrlib2.Int64
+.. class:: xdrlib2.Hyper
+
+   .. attribute:: min = -9223372036854775808
+   .. attribute:: max = 9223372036854775808
+   .. attribute:: signed = True
+   .. attribute:: packed_size = 8
+
+   These are concrete signed integer subclasses
+   that have an encoding size of 8 bytes.
+   They accept values
+   between -2\ :sup:`63` (-9223372036854775808) inclusive and
+   2\ :sup:`63` (9223372036854775808) exclusive.
+
+   :class:`xdrlib2.Hyper` is an alias of :class:`xdrlib2.Int64`
+
+
+.. class:: xdrlib2.Int64u
+.. class:: xdrlib2.UnsignedHyper
+
+   .. attribute:: min = 0
+   .. attribute:: max = 18446744073709551616
+   .. attribute:: signed = False
+   .. attribute:: packed_size = 8
+
+   These are concrete unsigned integer subclasses
+   that have an encoding size of 8 bytes.
+   They accept values
+   between 0 inclusive and
+   2\ :sup:`64` (18446744073709551616) exclusive.
+
+   :class:`xdrlib2.UnsignedHyper` is an alias of :class:`xdrlib2.Int64u`
+
+
+Additional concrete integer subclasses can be created by subclassing :class:`XdrInteger`
+with appropriate parameters `min` and `max`, subject to the restriction that
+`min` ≤ 0 < `max`.
+The values allowed for the subclass are between `min` (inclusive)
+and `max` (exclusive).
+As an example, the following will define an 8-bit unsigned integer type
+and a 16-bit signed integer type:
+
+.. code-block:: python
+
+   Int8u = XdrInteger.typedef('Int8u', min=0, max=1<<8)
+   Int16 = XdrInteger.typedef('Int16', min=-1<<15, max=1<<15)
 
 
 Original :mod:`xdrlib` module

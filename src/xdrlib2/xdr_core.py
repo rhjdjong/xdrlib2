@@ -6,7 +6,7 @@ import numbers
 import abc
 import re
 import enum
-
+import copy
 
 XDR_UNIT_SIZE = 4
 XDR_BYTE_ORDER = 'big'
@@ -70,12 +70,37 @@ def xdr_is_valid_name(name):
 xdr_mode = enum.Enum('xdr_mode', 'ABSTRACT CONCRETE FINAL')
 
 
-def encode(x):
-    return x._encode_()
+def encode(xdr_object):
+    """
+    :param xdr_object: The XDR object to encode
+    :return: bytes
+
+    :func:`encode` encodes :obj:`xdr_object` according
+    to the XDR standard, and returns a :class:`bytes` object
+    that contains the result of the encoding.
+    It does this by calling the :meth:`_encode_` method
+    on :obj:`xdr_object`.
+    """
+    return xdr_object._encode_()
 
 
-def decode(cls, bstr):
-    obj, rest = cls._decode_(bstr)
+def decode(xdr_class, bytestr):
+    """
+    :param xdr_class: The XDR class for the resulting XDR object
+    :param bytestr: A byte string with the XDR-encoded data for the XDR object
+    :return: an :class:`xdr_class` instance.
+    :raises TypeError: when bytestr does not contain a valid
+                       encoded :class:`xdr_class` object.
+    :raises ValueError: when bytestr contains more bytes than required for the
+                        construction of an :class:`xdr_class` object.
+
+    :func:`decode` constructs an instance of :class:`xdr_class`
+    from the encoded data in :obj:`bytestr`.
+    It does this by calling the :meth:`_decode_` method
+    on :class:`xdr_class`.
+
+    """
+    obj, rest = xdr_class._decode_(bytestr)
     if rest != b'':
         raise ValueError(f"input contains additional data '{rest}'")
     return obj
@@ -146,6 +171,15 @@ class _MetaXdrType(abc.ABCMeta):
 
 
 class XdrType(metaclass=_MetaXdrType):
+    """
+    :class:`XdrType` is the abstract base class for all other XDR types.
+
+    It defines the following methods that are available in all XDR types:
+
+    .. automethod:: xdrlib2.XdrType._encode_
+    .. automethod:: xdrlib2.XdrType._decode_
+    .. automethod:: xdrlib2.XdrType.typedef
+    """
     _mode = xdr_mode.ABSTRACT
     _parameters = ()    # Parameters used by an XDR factory class
     _xdr_parameters = {}
@@ -208,16 +242,52 @@ class XdrType(metaclass=_MetaXdrType):
             return False
 
     def _encode_(self):
+        """
+        Produces a :class:`bytes` object with the XDR-encoded version of the current object.
+
+        :return: :class:`bytes`
+        """
         raise NotImplementedError
 
     @classmethod
-    def _decode_(cls, bstr):
+    def _decode_(cls, bytestr):
+        """
+        Return a decoded XDR object and the remainder of :obj:`bytestr`.
+
+        :param bytestr: A :class:`bytes`-like object containing an XDR-encoded object.
+        :return: (xdr_object, bytestr)
+
+            *  :obj:`xdr_object` is the XDR object decoded from the
+               original :obj:`bytestr`.
+            *  :obj:`bytestr` contains the unused trailing bytes from
+               the original :obj:`bytestr`
+
+        :raises TypeError: when the contents of :obj:`bytestr` do not correspond
+                           to an XDR-encoded object of the current XDR class.
+        """
         raise NotImplementedError
 
     @classmethod
-    def typedef(cls, _xdr_type_name=None, *bases, **kwargs):
-        type_name = _xdr_type_name if _xdr_type_name else cls.__name__
-        new_type = cls.__class__(type_name, (cls,) + bases, {}, **kwargs)
+    def typedef(cls, xdr_type_name=None, *bases, **parameters):
+        """
+        Create a derived XDR class.
+
+        :param xdr_type_name: The name for the derived class.
+                               If `None` or not specified, the derived class
+                               will have the same name as the current class.
+        :param bases: Any additional base classes
+                      for the derived class.
+        :param parameters: Any parameters relevant for the creation of the derived class.
+                       Which parameters are valid depends on the current class.
+                       This is documented with each (abstract) XDR subclass in this module.
+        :return: An XDR class that is a subclass of the current class.
+                 When no `bases` and no `parameters` are supplied,
+                 the resulting XDR class is simply a copy of the current XDR class.
+        :raises TypeError: when invalid parameters are supplied for
+                           a subclass of the current class.
+        """
+        type_name = xdr_type_name if xdr_type_name else cls.__name__
+        new_type = cls.__class__(type_name, (cls,) + bases, {}, **parameters)
         return new_type
 
     def _eq_class(self, other):

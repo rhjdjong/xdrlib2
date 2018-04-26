@@ -12,6 +12,38 @@ from .xdr_core import (
 
 
 class XdrInteger(XdrType, int):
+    """
+    :class:`XdrInteger` is the abstract base type for the XDR integer types.
+
+    The :mod:`xdrlib2` module contains the preconstructed concrete subclasses
+    that are defined in the XDR standard :rfc:`4506`.
+    All concrete subclasses have the following read-only attributes:
+
+    .. attribute:: min
+
+       The minimum value (inclusive) accepted for the subclass
+
+    .. attribute:: max
+
+       The maximum value (exclusive) accepted for the subclass
+
+    .. attribute:: signed
+
+       Boolean value that indicates if the values
+       for the subclass are signed or not.
+
+    .. attribute:: packed_size
+
+       Size (in bytes) for the encoding of values of the subclass.
+
+    :class:`XdrInteger` subclasses the standard Python :class:`int` class.
+    XdrInteger objects can therefore be used everywhere
+    where a regular Python :class:`int` object is expected.
+    A consequence of this is that when an :class:`XdrInteger` object
+    is used in an expression, it is treated as a
+    regular Pyhton :class:`int` object,
+    and the resulting value is no longer an XDR type.
+    """
     _mode = xdr_mode.ABSTRACT
     _parameters = ('min', 'max')
     _xdr_parameters = {'min': None,

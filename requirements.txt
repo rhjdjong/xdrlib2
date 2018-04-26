@@ -5,3 +5,4 @@
 docutils
 sphinx
 sphinx_rtd_theme
+sphinx-autorun
