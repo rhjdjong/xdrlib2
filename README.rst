@@ -2,15 +2,6 @@
    :target: http://xdrlib2.readthedocs.org/en/latest/?badge=latest
    :alt: ReadTheDocs Documentation Status
 
-.. image:: https://travis-ci.org/rhjdjong/xdrlib2.svg
-   :target: https://travis-ci.org/rhjdjong/xdrlib2
-   :alt: Travis Test Status
-
-.. image:: https://ci.appveyor.com/api/projects/status/7585iqu3kv7hru3s?svg=true
-   :target: https://ci.appveyor.com/project/RuuddeJong/xdrlib2
-   :alt: AppVeyor Test Status
-
-
 
 =============================================
 ``xdrlib2`` --- A module for the XDR standard
@@ -28,4 +19,4 @@ The differences with the `xdrlib` package are:
    these into Python modules with the appropriate types. This allows
    users of the `xdrlib2` to directly use the high-level XDR data structures
    defined in the specifications. That is not possible with `xdrlib`, because
-   deals only with basic integer, float, and list types.
+   that deals only with basic integer, float, and list types.
