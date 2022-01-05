@@ -1,9 +1,0 @@
-# Copyright (c) 2018 Ruud de Jong
-# This file is part of the xdrlib2 project which is released under the MIT license.
-# See https://github.com/rhjdjong/xdrlib2 for details.
-
-
-import setuptools
-
-if __name__ == "__main__":
-    setuptools.setup()
