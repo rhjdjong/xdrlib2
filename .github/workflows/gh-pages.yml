@@ -22,7 +22,10 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install .[doc]
 
-      - name: Build pages
+      - name: Build documentation
+        run: ./docs/make html
+
+      - name: Publish pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
