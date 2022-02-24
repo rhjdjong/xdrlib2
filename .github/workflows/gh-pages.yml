@@ -23,7 +23,7 @@ jobs:
           pip install .[doc]
 
       - name: Build documentation
-        run: ./docs/make html
+        run: make --directory docs html
 
       - name: Publish pages
         uses: peaceiris/actions-gh-pages@v3
