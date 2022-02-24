@@ -15,4 +15,6 @@ jobs:
           pip install .[test]
       - name: Run unit tests
         run: |
+          bandit -r src
+          bandit -r tests -s B101
           pytest
