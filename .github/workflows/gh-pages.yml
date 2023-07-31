@@ -21,7 +21,7 @@ jobs:
 
     - name: Build HTML
       run: |
-        make --directory docs html
+        poetry run make --directory docs html
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v1
