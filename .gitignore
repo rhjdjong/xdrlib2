@@ -1,4 +1,4 @@
-/src/xdrlib2/_version.py
+/xdrlib2/_version.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -103,7 +103,7 @@ ipython_config.py
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+poetry.lock
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
@@ -239,3 +239,4 @@ fabric.properties
 /dist/
 /.pids
 /.pants.workdir.file_lock*
+/.idea/

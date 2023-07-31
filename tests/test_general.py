@@ -6,5 +6,6 @@ import sys
 
 
 def test_import_xdrlib2():
-    import xdrlib2
-    assert 'xdrlib2' in sys.modules
+    import xdrlib2  # noqa: F401
+
+    assert "xdrlib2" in sys.modules

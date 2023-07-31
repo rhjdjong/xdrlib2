@@ -1,6 +1,31 @@
-[build-system]
-requires = ["setuptools >= 42", "wheel", "setuptools_scm >= 6.2"]
-build-backend = "setuptools.build_meta"
+[tool.poetry]
+name = "xdrlib2"
+version = "0.1.0"
+description = "A replacement for the xdrlib package in Python's standard library"
+authors = ["Ruud de Jong <rhjdjong@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
 
-[tool.setuptools_scm]
-write_to = "src/xdrlib2/_version.py"
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+bandit = {extras = ["toml"], version = "^1.7.5"}
+black = {extras = ["d"], version = "^23.7.0"}
+isort = "^5.12.0"
+mypy = "^1.4.1"
+pytest = "^7.4.0"
+pyupgrade = "^3.9.0"
+refurb = "^1.17.0"
+ruff = "^0.0.280"
+
+[tool.poetry.group.doc]
+optional = true
+
+[tool.poetry.group.doc.dependencies]
+bandit = {extras = ["toml"], version = "^1.7.5"}
+sphinx = "^7.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

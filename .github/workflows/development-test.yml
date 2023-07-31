@@ -9,12 +9,12 @@ jobs:
         with:
           python-version: '3.10'
           architecture: 'x64'
+      - name: install poetry
+        uses: snok/install-poetry@v1
       - name: install testable version
-        run: |
-          python -m pip install --upgrade pip
-          pip install .[test]
+        run: poetry install
       - name: Run unit tests
         run: |
-          bandit -r src
+          bandit -r xdrlib2
           bandit -r tests -s B101
           pytest
