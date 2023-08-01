@@ -10,6 +10,7 @@ Welcome to xdrlib2's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+.. mdinclude:: ../../README.md
 
 
 Indices and tables

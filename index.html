@@ -33,6 +33,25 @@
 <h1>Welcome to xdrlib2’s documentation!<a class="headerlink" href="#welcome-to-xdrlib2-s-documentation" title="Permalink to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 </div>
+<a class="reference external image-reference" href="https://github.com/astral-sh/ruff"><img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" /></a>
+</section>
+<section id="xdrlib2-a-toolkit-for-the-xdr-standard">
+<h1><code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> – A toolkit for the XDR standard<a class="headerlink" href="#xdrlib2-a-toolkit-for-the-xdr-standard" title="Permalink to this heading">¶</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> module is an alternative for the <code class="docutils literal notranslate"><span class="pre">xdrlib</span></code> package
+in Python’s standard library.
+The differences with the <code class="docutils literal notranslate"><span class="pre">xdrlib</span></code> package are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> implements <span class="target" id="index-0"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc4506.html"><strong>RFC 4506</strong></a>, which obsoletes <span class="target" id="index-1"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc1832.html"><strong>RFC 1832</strong></a>, which in turn replaced <span class="target" id="index-2"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc1014.html"><strong>RFC 1014</strong></a>.
+The standard library’s <code class="docutils literal notranslate"><span class="pre">xdrlib</span></code> package on the other hand only partially implements
+the obsolete <span class="target" id="index-3"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc1014.html"><strong>RFC 1014</strong></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> offers a compiler that can convert XDR specifications files to Python
+modules with the appropriate type definitions. This allows
+users of the <code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> to directly use the high-level XDR data structures
+defined in the specifications. That is not possible with <code class="docutils literal notranslate"><span class="pre">xdrlib</span></code>, because
+that deals only with basic integer, float, and list types.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">xdrlib2</span></code> is extensible. Users can define their own variant of the language, define type definitions and compile
+these specifications into corresponding Python modules.</p></li>
+</ul>
 </section>
 <section id="indices-and-tables">
 <h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this heading">¶</a></h1>
@@ -91,7 +110,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2022, Ruud de Jong.
+      &copy;2023, Ruud de Jong.
       
       |
       Powered by <a href="http://sphinx-doc.org/">Sphinx 7.1.1</a>
