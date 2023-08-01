@@ -18,9 +18,8 @@
 # -- Project information -----------------------------------------------------
 
 project = 'xdrlib2'
-copyright = '2022, Ruud de Jong'
+copyright = '2023, Ruud de Jong'
 author = 'Ruud de Jong'
-
 
 # -- General configuration ---------------------------------------------------
 
@@ -35,7 +34,9 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
+    "sphinx_mdinclude",
 ]
+source_suffix = [".rst", ".md"]
 
 intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
@@ -46,7 +47,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 # -- Options for HTML output -------------------------------------------------
 
