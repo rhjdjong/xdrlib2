@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "xdrlib2"
-version = "0.1.0"
+version = "0.0.0"
 description = "A replacement for the xdrlib package in Python's standard library"
 authors = ["Ruud de Jong <rhjdjong@users.noreply.github.com>"]
 license = "MIT"
@@ -23,9 +23,11 @@ ruff = "^0.0.281"
 optional = true
 
 [tool.poetry.group.doc.dependencies]
-bandit = {extras = ["toml"], version = "^1.7.5"}
 sphinx = "^7.1.1"
 
+[tool.poetry-dynamic-versioning]
+enable = true
+
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
