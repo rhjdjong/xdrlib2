@@ -39,7 +39,7 @@ addopts = "-v --cov --cov-report term-missing:skip-covered --cov-report xml --ju
 
 [tool.coverage.run]
 branch = true
-#source = ["xdrlib2"]
+source = ["xdrlib2"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
