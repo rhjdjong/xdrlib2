@@ -13,8 +13,15 @@ jobs:
         uses: snok/install-poetry@v1
       - name: install testable version
         run: poetry install
-      - name: Run unit tests
+      - name: Run static checks
         run: |
-          poetry run bandit -r xdrlib2
-          poetry run bandit -r tests -s B101
-          poetry run pytest
+          poetry run isort --check . || FAILED=yes
+          poetry run black --check . || FAILED=yes
+          poetry run bandit -r xdrlib2 || FAILED=yes
+          poetry run bandit -r tests -s B101 || FAILED=yes
+          poetry run ruff . || FAILED=yes
+          poetry run mypy . || FAILED=yes
+          if [ $FAILED ]; then false; fi
+      - name: Run tests
+        run: |
+          poetry run pytest tests

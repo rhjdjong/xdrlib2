@@ -16,3 +16,13 @@ The differences with the `xdrlib` package are:
   that deals only with basic integer, float, and list types.
 - `xdrlib2` is extensible. Users can define their own variant of the language, define type definitions and compile
   these specifications into corresponding Python modules. 
+
+## Installation
+
+```shell
+pip install xdrlib2
+```
+
+This installs the `xdrlib2` library. One of the things it installs is an executable called `xdrc`.
+This executable can be used to compile `XDR` specification files into corresponding 
+Python modules.

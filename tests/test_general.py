@@ -5,7 +5,7 @@
 import sys
 
 
-def test_import_xdrlib2():
+def test_import_xdrlib2() -> None:
     import xdrlib2  # noqa: F401
 
     assert "xdrlib2" in sys.modules
