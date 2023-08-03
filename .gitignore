@@ -241,3 +241,4 @@ fabric.properties
 /.pids
 /.pants.workdir.file_lock*
 /.idea/
+/.ruff_cache/

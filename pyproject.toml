@@ -37,6 +37,10 @@ enable = true
 [tool.pytest.ini_options]
 addopts = "-v --cov --cov-report term-missing:skip-covered --cov-report xml --junitxml=report.xml"
 
+[tool.bandit]
+exclude_dirs = [".venv", ".idea"]
+skips = ["B101"]
+
 [tool.coverage.run]
 branch = true
 source = ["xdrlib2"]

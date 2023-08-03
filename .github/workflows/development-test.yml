@@ -17,8 +17,7 @@ jobs:
         run: |
           poetry run isort --check . || FAILED=yes
           poetry run black --check . || FAILED=yes
-          poetry run bandit -r xdrlib2 || FAILED=yes
-          poetry run bandit -r tests -s B101 || FAILED=yes
+          poetry run bandit -c pyproject.toml -r . || FAILED=yes
           poetry run ruff . || FAILED=yes
           poetry run mypy . || FAILED=yes
           if [ $FAILED ]; then false; fi
