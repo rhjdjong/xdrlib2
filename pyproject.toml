@@ -14,8 +14,8 @@ classifiers = [
 python = "^3.11"
 
 [tool.poetry.group.dev.dependencies]
-bandit = {extras = ["toml"], version = "^1.7.5"}
-black = {extras = ["d"], version = "^23.7.0"}
+bandit = { extras = ["toml"], version = "^1.7.5" }
+black = { version = "^23.7.0" }
 isort = "^5.12.0"
 mypy = "^1.4.1"
 pytest = "^7.4.0"
@@ -58,6 +58,9 @@ exclude_lines = [
 
 [tool.refurb]
 python_version = "3.11"
+
+[tool.ruff]
+line-length = 120
 
 [tool.mypy]
 warn_unused_configs = true
