@@ -15,7 +15,7 @@ python = "^3.11"
 
 [tool.poetry.group.dev.dependencies]
 bandit = { extras = ["toml"], version = "^1.7.5" }
-black = { version = "^23.7.0" }
+black = { version = "^24.1.1" }
 isort = "^5.12.0"
 mypy = "^1.4.1"
 pytest = "^8.0.0"
